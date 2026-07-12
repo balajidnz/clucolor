@@ -1,6 +1,7 @@
 // @ts-check
 import { safeRender } from '../share/render.js';
 import { decode } from '../share/encode.js';
+import { showMaker } from './maker.js';
 import { DEFAULT_MESSAGE } from '../../data/dialogue.js';
 
 /**
@@ -99,7 +100,12 @@ export function showPlaceholderPuzzle(root, id) {
 }
 
 /**
- * The ending. Shows the custom message from the URL hash, or the default.
+ * The ending. Shows the custom message decoded from the URL hash, or the
+ * default if there isn't one (or if the hash is malformed, or hostile).
+ *
+ * The message is the whole gift, so it gets the screen to itself. Only once it
+ * has been sitting there a while does the "write your own" offer appear —
+ * showing a call-to-action underneath someone's love letter would cheapen it.
  *
  * @param {HTMLElement} root
  */
@@ -111,11 +117,11 @@ export function showEnding(root) {
 
   const msg = document.createElement('p');
   msg.className = 'ending-message';
-  // textContent only. `white-space: pre-wrap` in CSS handles the line breaks —
-  // NOT a replace(/\n/g,'<br>') + innerHTML, which is how people reopen the
-  // hole they just closed.
+  // textContent only, ALWAYS. This string came out of the URL, so it is
+  // attacker-controlled. Line breaks come from `white-space: pre-wrap` in CSS —
+  // NOT from replacing \n with <br> and assigning innerHTML, which is exactly
+  // how people reopen the hole they just closed.
   safeRender(msg, payload?.msg ?? DEFAULT_MESSAGE);
-
   panel.append(msg);
 
   if (payload?.from) {
@@ -125,11 +131,14 @@ export function showEnding(root) {
     panel.append(from);
   }
 
-  // The maker flow ("now write your own") lands on day 4.
-  const soon = document.createElement('p');
-  soon.className = 'panel-sub';
-  soon.textContent = '[ make-your-own-link flow: day 4 ]';
-  panel.append(soon);
+  const offer = document.createElement('button');
+  offer.className = 'panel-btn ending-offer';
+  offer.textContent = 'send this to someone';
+  offer.addEventListener('click', () => {
+    panel.remove();
+    showMaker(root);
+  });
+  panel.append(offer);
 
   root.append(panel);
 }

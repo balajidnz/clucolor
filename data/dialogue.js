@@ -30,7 +30,7 @@ export const NAMES = { boy: 'BOY', girl: 'GIRL' };
 
 /** Fallback ending, shown when the URL carries no custom message. */
 export const DEFAULT_MESSAGE =
-  'Spring is always around the corner - Even in a grey world.';
+  'Spring is always around the corner - even a grey world';
 
 export const DIALOGUE = {
   // --- waking ------------------------------------------------------------

@@ -8,8 +8,9 @@
  * Primary target is a laptop browser; secondary is Android Chrome. Anything
  * that passes in Safari (the strictest of them) passes in Blink.
  *
- * The failure this exists to prevent: the birthday message is written in Tamil,
- * or with an emoji, and `btoa` throws — on the 22nd.
+ * The failure this exists to prevent: someone puts an emoji in the message and
+ * `btoa` throws — on the 22nd. `btoa` rejects ANY character outside Latin-1, and
+ * an emoji is the strictest case of that: 4 UTF-8 bytes AND a surrogate pair.
  */
 import { encode, decode, MAX_MESSAGE } from '../js/share/encode.js';
 
@@ -53,11 +54,8 @@ export function runSpec() {
   const zwj = 'family 👨‍👩‍👧 sequence';
   check('ZWJ emoji sequence', roundTrip(zwj) === zwj, roundTrip(zwj));
 
-  const tamil = 'என் அன்பே, பிறந்தநாள் வாழ்த்துக்கள்';
-  check('Tamil', roundTrip(tamil) === tamil, roundTrip(tamil));
-
-  const mixed = 'நான் உன்னை காதலிக்கிறேன் 💖\nalways';
-  check('mixed script + emoji + newline', roundTrip(mixed) === mixed, roundTrip(mixed));
+  const mixed = 'i love you 💖\nalways ❤️';
+  check('multiple emoji + newline', roundTrip(mixed) === mixed, roundTrip(mixed));
 
   const newlines = 'line one\nline two\n\nline four';
   check('newlines preserved (pre-wrap depends on them)', roundTrip(newlines) === newlines);

@@ -166,18 +166,101 @@ body { display: grid; place-items: center; }
 
 .panel-ending { background: #0b0d12fa; }
 
+/* The message ARRIVES. It is the whole gift; it should not just blink into
+   existence like a dialog box. */
 .ending-message {
   margin: 0;
-  max-width: 24ch;
+  max-width: 26ch;
   font-size: clamp(16px, 2.4vw, 30px);
   line-height: 1.6;
-  white-space: pre-wrap; /* the message may contain newlines; NEVER innerHTML */
+  white-space: pre-wrap; /* newlines WITHOUT innerHTML */
+  overflow-wrap: anywhere; /* a 280-char word must not blow out the layout */
+  animation: rise 1500ms cubic-bezier(.22,.61,.36,1) both;
 }
 
 .ending-from {
   margin: 0;
   color: #8f98ad;
   font-size: clamp(11px, 1.3vw, 15px);
+  animation: rise 1200ms cubic-bezier(.22,.61,.36,1) 900ms both;
+}
+
+/* Held back deliberately — putting a call-to-action under someone's love letter
+   the instant it lands would cheapen it. */
+.ending-offer {
+  margin-top: 26px;
+  animation: rise 900ms ease 3200ms both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- maker ---------------------------------------------------------------- */
+
+.panel-maker { gap: 10px; }
+
+.maker-text,
+.maker-from,
+.maker-link {
+  width: min(46ch, 82vw);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: clamp(12px, 1.4vw, 16px);
+  color: var(--ink);
+  background: #12141a;
+  border: 2px solid #3a4152;
+  border-radius: 3px;
+  resize: none;
+}
+
+.maker-text { line-height: 1.5; }
+
+.maker-text:focus,
+.maker-from:focus,
+.maker-link:focus {
+  border-color: #c8433f;
+  outline: none;
+}
+
+.maker-count {
+  margin: 0;
+  width: min(46ch, 82vw);
+  text-align: right;
+  font-size: 11px;
+  color: #6f7891;
+}
+
+.maker-count.is-full { color: #c8433f; }
+
+.maker-result {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  margin-top: 12px;
+  animation: rise 500ms ease both;
+}
+
+.maker-link {
+  color: #9fd0c4;
+  font-size: clamp(10px, 1.1vw, 13px);
+}
+
+.maker-note {
+  margin: 0;
+  font-size: 11px;
+  color: #6f7891;
+}
+
+.panel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.panel-btn:disabled:hover {
+  border-color: #3a4152;
+  transform: none;
 }
 
 /* --- cutscene fade -------------------------------------------------------- */

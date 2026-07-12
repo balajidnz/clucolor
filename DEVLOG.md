@@ -8,6 +8,63 @@ This file is the diff against it — what actually happened.
 
 ---
 
+## Day 4 — 2026-07-13
+
+**Goal:** close the product loop — the ending reads a custom message, and anyone who
+finishes can write their own and send it on.
+**Status:** done. ⭐⭐ **The entire product exists.** Everything from here is upgrade,
+not construction.
+
+### Shipped
+
+- **Ending** (`js/game/screens.js`): decodes the message from the URL hash, falls back to
+  `DEFAULT_MESSAGE`. The message ARRIVES (a slow rise) and gets the screen to itself —
+  the "send this to someone" button is held back ~3s, because putting a call-to-action
+  under someone's love letter the instant it lands would cheapen it.
+- **Maker** (`js/game/maker.js`): textarea + live counter + optional "from", generates the
+  link, copy button, and `navigator.share` on devices that have it (hidden elsewhere, so
+  there's never a button that does nothing).
+- **`tests/ending.test.html` — 20 tests, all passing.**
+- Clouds (previous session): blocky, drift on a wall-clock so the sky moves even when the
+  player stands still. That's what stops a dead world reading as a *frozen* one.
+
+### The tests that matter
+
+The ending renders a string that came out of the URL — **fully attacker-controlled**.
+Someone can craft `sunair.fun/#m=<payload>` and send it to a target. So:
+
+- **5 XSS payloads** (`<img onerror>`, `<script>`, `<svg onload>`, `javascript:` href,
+  iframe injection) all render as **inert literal text**. The assertion is not just "the
+  text matches" — it's that **no element was ever created** from the payload.
+- Malformed hash → default message. Never blank, never throws.
+- **Emoji round-trips.** Kept even though the game is English-only: `btoa` rejects ANY
+  character outside Latin-1, and an emoji is the strictest case (4 UTF-8 bytes AND a
+  surrogate pair). Someone typing 💖 into the maker would otherwise crash the encoder.
+  (Tamil tests dropped at Balaji's request — emoji covers the same code path, harder.)
+- **The maker is driven for real**: type → click → read the link back → decode it. This is
+  the only test that proves the WHOLE loop end to end.
+
+### Problems hit, and the fixes
+
+**1. The test page ran nothing, silently.** I gave it the same CSP the game ships
+(`default-src 'self'`) — which **forbids inline scripts**. The other test page only works
+because it has no CSP.
+→ *Fix:* moved the spec into `tests/ending.test.js`, an external module. Better outcome
+than weakening the CSP: **the ending is now tested under the exact policy it ships with.**
+(index.html was always fine — `main.js` is external.)
+
+**2. A test asserted the wrong string.** "The link contains no `=`" failed — because the
+hash is `#m=<payload>` and **`m=` legitimately contains an equals sign**. The code was
+right; the test was wrong. Now asserts against the payload, not the whole hash.
+
+### Next
+
+- **Day 5:** `hints.js` + the real riddle.
+- Days 6-7: sliding-tile puzzle (+ BFS hint/autosolve), morse, and the 3 custom sprites.
+- `DEFAULT_MESSAGE` is Balaji's line. **Do not invent copy** — the words are his.
+
+---
+
 ## Day 3 — Sun 2026-07-12 (still day 1 by the calendar; we're ahead)
 
 **Goal:** the game gets a beginning, middle and end.
