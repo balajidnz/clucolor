@@ -6,6 +6,509 @@ Newest day at the top. Ship date: **2026-07-22**.
 **The plan lives at** `~/.claude/plans/okay-so-here-s-the-mighty-eclipse.md`.
 This file is the diff against it — what actually happened.
 
+## Where we are
+
+**⭐ NO PLACEHOLDERS LEFT.** All three puzzles are real. The game is complete end to end.
+
+| | |
+|---|---|
+| Live | `https://sunair.fun` — coming-soon page. The game is on `dev`; merge on the 21st. |
+| Playable | title → intro → lion (**riddle**) → house interior (**sliding photo**) → bench (**morse**) → ending → maker → shareable link |
+| Tests | encode 28 · ending 27 · riddle 41 · dialogue 14 · slider 25 · morse 30 = **165** |
+| Music | ✅ four layers, phase-locked, 1.2MB. Grows as the world does. |
+| Left | day 9 **playtest** · day 10 freeze · **Balaji: rewrite the dialogue** |
+
+**Waiting on Balaji:**
+- [ ] **Rewrite `data/dialogue.js`.** The structure is right; the words are still mine.
+      This is the LAST thing outstanding.
+- [x] ~~The music~~ — done (day 8).
+
+## Audio — the ORIGINAL SPEC (kept for the record). ⚠ SUPERSEDED BY DAY 8.
+
+**Read day 8 for what actually shipped.** Two things below turned out wrong in practice:
+the loop is **8 seconds, not 60-120** (his files were already 8s loops repeated), and the
+"identical length / same session" requirement was satisfied by *cutting one cycle from each*
+rather than by re-exporting. The `.ogg` → `.m4a` correction below still stands and matters.
+The **ending cue is still outstanding** and would still be worth having.
+
+**Layered, not one track.** Each puzzle solved unlocks an element — his idea, and it is the
+standard way adaptive game music works (*vertical remixing*).
+
+**STEMS, not before/after mixes.** All stems start at the SAME instant; locked ones sit at
+gain 0. Unlocking ramps a gain up. Because they started together and share a length they are
+**phase-locked forever** — a layer can arrive mid-bar, in time. Crossfading two full mixes
+instead would double shared instruments against each other, could only switch at a loop
+boundary (so the music would change up to 30s AFTER she solves it), and costs ~4x the
+download.
+
+**⚠ FORMAT — I GOT THIS WRONG FIRST TIME.** I said `.ogg`. **Safari cannot decode Ogg Vorbis
+via `decodeAudioData`** — and that is precisely the API the stems design needs. (Safari 18.4
+added Ogg for `<audio>` elements, but NOT for Web Audio.) The music would be silent on every
+Mac and iPhone, and the whole point is that the link gets forwarded.
+
+→ **Ship AAC in `.m4a`.** It is the one compressed format `decodeAudioData` handles in Safari,
+Chrome, Firefox and Edge alike.
+
+→ **Balaji sends WAV masters. I convert.** Not for convenience:
+   - **All four must be encoded with IDENTICAL settings** or they can drift apart, and the
+     entire design rests on them being phase-locked.
+   - AAC adds ~2000 samples of priming silence. Harmless BETWEEN stems (they all get the same
+     padding, so they stay in sync with each other) but it puts a **click at the loop point**.
+     Fixed by setting `loopStart`/`loopEnd` from the WAV's **exact sample count** — which
+     requires having the WAV.
+   - macOS ships `afconvert`; no install needed.
+   - **Never SHIP wav**: ~10MB/minute, so four 90s stems ≈ 60MB. She is opening a link.
+
+**Other requirements:** identical length to the sample · same BPM/key · exported from one
+session · each loops seamlessly on its own.
+Four stems: `bed` (from the start) → `+lion` (0.33) → `+photo` (0.66) → `+morse` (1.0).
+
+**ONE LOOP, 60-120 SECONDS. Not a long linear piece.** (Asked 2026-07-13.)
+- **Playtime is variable** (~5-9 min). A 15-minute track means she hears a third of it if she
+  is quick — and it RUNS OUT and goes silent if she lingers.
+- **Size.** Stems must be the same length, so 15 minutes means *four* × 15 = an hour of audio,
+  ~30MB+. She is opening a link. A 90s loop × 4 stems is ~3MB and loads behind the title.
+- **And it is unnecessary: the stems ARE the composition.** The arc is carried by the
+  ARRANGEMENT changing with the story, not by a melody moving through time — and it changes
+  *when she solves something*, which a fixed timeline can never do.
+- The real constraint: it must survive **five or six repeats without irritating.** Sparse. No
+  hook that demands attention. It is the room, not the song.
+
+**Plus a separate ENDING CUE (5th file, NOT looping, 30-60s)** for the final message. The
+loop has to be self-effacing; the ending does not. It plays once, while she is reading his
+words, so it can be as direct as he likes.
+
+**And a lowpass on the master, driven by `colorLevel`** (~350Hz → ~18kHz). The stems control
+*what plays*; the filter controls *how present it feels*. The bed alone through a nearly-shut
+lowpass sounds **remembered rather than heard**. ~20 lines, same `colorLevel` that drives
+everything else.
+
+**All four stems must be started in the title-screen click** — browsers refuse to start an
+`AudioContext` without a user gesture, and if they are not started together they will never
+be in sync.
+
+---
+
+## Day 8 — 2026-07-14
+
+**Goal:** the music.
+**Status:** done. Four layers, played TOGETHER, phase-locked. 1.2MB shipped.
+
+### What it does
+
+Every stem is the same **8.000-second loop**, so all four sources start at the same instant
+and loop the same window — **phase-locked forever**. Solving a clue does not swap the music;
+it **adds** to it. By the ending all four are playing at once.
+
+On top, a **lowpass driven by `colorLevel`** (620Hz → 20kHz, exponential — the ear hears
+brightness that way). In the dead world the filter is nearly shut and the music sounds
+*remembered rather than heard*. Every clue opens it. Same number that drives the picture.
+
+Plus: a limiter (four layers summing can clip at the exact moment the world blooms), and a
+mute button that is always on screen.
+
+### ⚠ I misread Balaji's files TWICE. He corrected me both times.
+
+**First:** the four files were 66.009 / 65.881 / 64.769 / 66.988s — different lengths. I said
+they could never be layered.
+**Then:** the loudness profile (RMS 0.072 / 0.065 / 0.036 / **0.224**) didn't stack
+monotonically, so I said they were four complete tracks, not stems. **Bad inference** — real
+stems are individual instruments and would look exactly like that.
+
+**What they actually are:** each file is the **same 8.000s loop repeated**, sample-for-sample.
+Autocorrelation **1.0000 at exactly 8.000s** — not "similar", *identical samples*. The 66s
+lengths were just different numbers of repeats and never mattered at all.
+
+→ Cut one cycle from each → four files of identical length → true layering works.
+
+**Lesson: when the person who MADE the thing tells you what it is, believe them and go and
+measure it.** He said "each is a 2-4 second loop recorded for 60+ seconds". He was right (8s,
+not 2-4) and I had twice concluded the opposite from summary statistics.
+
+### The trap that measurement caught
+
+**AAC decoding adds ~2,751 frames (57ms) of priming silence.** Loop the whole buffer and that
+silence lands in the music **every 8 seconds** — a stutter you would blame on the composition.
+
+→ Each file now holds the loop **twice**, and we loop a window inside it. Any 8-second window
+of a periodic signal is itself a seamless loop; the padding is never inside it; and taking the
+same window from all four keeps their phase.
+
+Verified empirically before trusting it (`tools/audio.html`): all four decode to *exactly*
+386,751 frames, identical, so they can never drift.
+
+### The alignment: MEASURED, not tuned by ear
+
+Balaji: *"the photo one is off and doesn't match the music."* He was right, and I could not
+find it by ear or by guessing.
+
+He supplied a **reference mix** of all four layered correctly. Each stem is ADDITIVELY present
+in it, so an **FFT cross-correlation** of stem-against-reference spikes at the exact alignment:
+
+| stem | offset | corr | predicted if it's a straight sum |
+|---|---|---|---|
+| 0-dead | 4.7514s | 0.284 | 0.293 |
+| 1-lion | 4.7107s | 0.270 | 0.264 |
+| 2-photo | 5.7919s | 0.145 | 0.147 |
+| 3-alive | 1.8010s | 0.911 | 0.907 |
+
+Every correlation lands within a hair of what you'd predict **if the reference were these four
+summed at equal gain** — which proves both the offsets AND that **the correct gains are all
+1.0**. The photo layer sounded "too loud" because I had *boosted* it to 1.35; it and the lion
+sounded "off" because they were rotated wrong, and **a phase clash reads as harshness, which
+is easy to mistake for volume.**
+
+**Then reconstructed the mix from the stems to be sure:**
+
+```
+all aligned at their own file start   ->  0.014   (not his mix at all)
+measured offsets                      ->  0.999   (IS his mix)
+```
+
+Balaji's instinct was that they should all "start together". He was right *musically* — but
+each file has a **different lead-in before the loop actually begins**, so starting them at the
+same timestamp aligns the FILES, not the MUSIC. The offsets are what "starting together"
+actually means.
+
+**And a method lesson:** my first search scanned rotations at **20ms steps**. Useless — at
+audio frequencies, being 10ms out destroys correlation, so it stepped straight over every
+peak and returned confident nonsense (0.068 / 0.097 / 0.124). **Correlating raw audio needs
+sample resolution: FFT, not a for-loop over coarse lags.**
+
+### Files
+
+`assets/audio/*.m4a` — 1.2MB total. **AAC, not Ogg**: Safari cannot `decodeAudioData` Ogg
+Vorbis, which is the API the layering needs, so Ogg would have been silent on every Mac and
+iPhone. WAV masters are gitignored (49MB); the derived 8s loops are in `assets/_raw/loops/`.
+
+---
+
+## Day 7 — 2026-07-13
+
+**Goal:** the morse carving. The last placeholder.
+**Status:** done. 30 tests. **⭐ The game has no placeholders left.**
+
+### Shipped
+
+- `data/morse.js` — the alphabet, the answer, and the carving.
+- `js/game/puzzles/morse.js` — act 3, for real.
+- `tests/morse.test.html` — 30 tests.
+
+### The bug this puzzle was one careless edit away from
+
+**The bench saying one thing while the game expects another.**
+
+If the carving (`.. / .-.. --- ...- . / -.-- --- ..-`) and the answer (`I LOVE YOU`) were two
+separate strings, someone edits one, forgets the other, and **the puzzle becomes literally
+impossible** — no error, no warning, and no way for her to know she is right. It would be
+discovered by the one person it must not be discovered by.
+
+→ **The carving is DERIVED from the answer.** One source of truth; they cannot drift.
+The tests assert it: the marks spell exactly what the game expects, every mark is the correct
+morse for its letter, and no letter of the answer is missing from the alphabet.
+
+### Two things that make it a moment rather than a text box
+
+**1. The letters light up ON THE CARVING as she types.** Wired to `input`, not to a submit
+button. She types "I", and two scratches on a bench light up. Ten lines of code. There is no
+submit button at all — when the last letter lands, it is simply done.
+
+**2. The companion produces the A-Z chart.** Non-negotiable, and tested. Nobody should have to
+leave the game and search the web to finish a birthday present. It arrives at hint level 1,
+and it can be asked for immediately.
+
+### Morse follows the SLIDER's rule, not the riddle's
+
+`clockCeiling: 3` — the clock gives her the chart and every word of help, **but will not
+decode it for her.**
+
+Once she has the chart, morse is **mechanical**: she is actively working through it, exactly
+like the sliding puzzle, and finishing it mid-decode takes the thing out of her hands. The
+riddle is the odd one out — without the word, no amount of effort gets you there, so a timed
+rescue is a genuine rescue.
+
+| puzzle | the clock may… | because |
+|---|---|---|
+| riddle | **solve it** | stuck is stuck; effort does not help |
+| slider | only **talk** | she is progressing; being shown the piece IS being given it |
+| morse | talk + **give the chart** | mechanical once she has the chart |
+
+All three still hand over completely **if she asks**.
+
+---
+
+## Day 6 — 2026-07-13
+
+**Goal:** the sliding-tile puzzle. Plus two corrections from Balaji, both right.
+**Status:** done. Two of three puzzles are real.
+**All suites:** encode 28 · ending 27 · riddle 41 · dialogue 14 · slider 25.
+
+### Shipped
+
+- `js/game/puzzles/eight.js` — the 8-puzzle model + the search.
+- `js/game/puzzles/slider.js` — DOM board, 3x3, over Balaji's ice-cream photo.
+- `tests/slider.test.html` — 19 tests.
+- The frame on the wall now shows the **real photograph, in pieces, with one missing** —
+  and stays **mended** once you have mended it, so you walk back out past a whole photo.
+
+### Two things that look like over-engineering and are not
+
+**1. Shuffle by random LEGAL MOVES, never a random permutation.**
+Exactly **half of all 9! arrangements of an 8-puzzle are UNSOLVABLE.** Shuffle the array and
+there is a coin-flip chance you hand the player a board that cannot be finished — and no
+hint saves her, because the auto-solve would loop too. She would slide tiles forever.
+*The test doesn't just assert we avoid it — it DEMONSTRATES the danger*: a naive shuffle
+came back unsolvable ~half the time, exactly as the maths says.
+
+**2. BFS the ENTIRE state space, once.**
+Only **181,440** states are reachable, so we walk backwards from the solved picture and
+record every state's exact distance from the goal. That one table gives a **perfect hint**
+("move this piece, now") and a **perfect auto-solve** (walk downhill) — both optimal, both
+free. Best value-per-line in the project. Built during asset load, never during a click.
+
+**The test that proves the search is correct:** the hardest board is exactly **31 moves**
+from solved. That is the 8-puzzle's known diameter. If the search were wrong, that number
+would be wrong.
+
+### ⚠ The day-5 guard caught a bug that had been there since day 1
+
+```
+bad walk frame: i=-1  t=-0.0073  frames=6
+```
+
+**`dt` was going NEGATIVE.** A `requestAnimationFrame` timestamp is the time the frame
+*began*, which can be EARLIER than the `performance.now()` captured just before calling
+`requestAnimationFrame`. So the first `dt` of the game is often slightly negative.
+
+Harmless until something integrated time. Then: the animation clock reaches `-0.007`,
+`Math.floor(-0.007 * 11) % 6` is **-1**, `walk[-1]` is `undefined`, and it explodes far
+away inside `drawImage` with an inscrutable "value is not of type HTMLImageElement".
+
+→ *Fix:* clamp `dt` at **both** ends in `loop.js`. The upper clamp (alt-tab) was always
+there; the lower one was not.
+→ *And the lesson:* the guard in `frameFor()` — added on day 5 purely because a NaN index
+would be hard to diagnose — is the only reason this took two minutes instead of an hour.
+**Guard the index where it is computed, not where it explodes.**
+
+### The watermark
+
+Gemini stamps a sparkle into every image and **no prompt suppresses it**. On the
+transparent-background sprites the keyer happened to eat it; on an opaque photograph it
+survives. It had to go: the bottom-right tile is the one removed as the slider's blank, and
+it **fills back in on solve** — so the watermark would have reappeared at the exact moment
+of the reveal.
+
+- **Clone-patching FAILED.** The bench is a narrow diagonal strip in that corner, so there
+  is no clean patch of bench to copy from — copying from above pasted *grass* into the
+  middle of the bench.
+- **Inpainting worked** (`inpaintSparkle` in `tools/keyout.js`): mask the sparkle's own
+  pixels (pale and desaturated, against a saturated red bench — the gap is the detector),
+  then grow the surrounding pixels inward one ring at a time. **Copy colours, never average
+  them** — averaging invents colours outside the palette and pixel art stops being pixel
+  art. 17 passes, nothing left over, stripes intact.
+
+### ⚠ The clock must not solve a puzzle you are ACTIVELY SOLVING (Balaji's call)
+
+Day 5 built one rule for all three puzzles: the clock escalates to an auto-solve at 120s.
+**That is wrong for the sliding puzzle, and Balaji caught it.**
+
+The two puzzles are different in kind:
+- **The riddle is know-it-or-you-don't.** Stuck at two minutes means genuinely stuck, and
+  solving it for her is a **rescue**.
+- **The sliding puzzle is a task she is actively progressing on.** Having the game finish it
+  while she is mid-move is not a rescue — **it takes the thing out of her hands.**
+
+And then a sharper version of the same point, also his: **being SHOWN the answer is being
+GIVEN the answer.** A highlighted piece ends the puzzle just as surely as sliding it would.
+
+→ *Fix:* `clockCeiling` on the hint controller — the highest level the CLOCK may reach on
+its own. **Asking always goes further.**
+- riddle: default (the clock may go all the way, including the auto-solve)
+- slider: **`clockCeiling: 1`** — the clock may only ever TALK. Pointing at a piece (level 2-3)
+  and doing it for her (level 4) are **ASK-ONLY**.
+
+Tested: ten minutes of sitting on the sliding puzzle produces words and nothing else; asking
+once starts the pointing; asking on gets it solved.
+
+The hint ladder had to be re-ordered to match — the clock's last line used to be *"Here —
+let me. I think I've done this before."*, i.e. she'd offer to take over and then not.
+
+### The link was too long (Balaji) — and "encryption" was the wrong tool
+
+**Encryption does not shorten anything.** Ciphertext is at least as long as plaintext,
+usually longer. And it is not needed: **the fragment after `#` is never sent to the server**,
+so the message already never touches anyone's logs (day-1 decision).
+
+What actually shortens a link:
+
+**1. Drop JSON.** `{"v":1,"msg":"..."}` spends ~15 bytes on pure punctuation, and base64
+taxes every byte by 4/3 — so **~20 characters of every link were syntax**. The format is now
+one version byte + the fields, separated by `0x1f`.
+
+**2. Compress — but ONLY when it wins.** Below ~100 characters, deflate's own overhead makes
+the result LONGER. So: compress, compare, keep whichever is shorter. The version byte says
+which. (The plan had this on the cut list. It earns its place on long messages.)
+
+| message | before | after |
+|---|---|---|
+| 17 chars | 66 | **46** |
+| 54 chars | 116 | **96** |
+| ~290 chars | ~420 | **~260** |
+
+**The floor is information-theoretic.** A 54-char message is 54 bytes; base64 makes it 72,
+plus 22 for `https://sunair.fun/#m=`. Nothing gets under that. The only way shorter is a
+shorter message.
+
+**Security note:** the field separator is a CONTROL CHARACTER, and `sanitize()` strips
+control characters. That is precisely what makes it safe as a separator — otherwise a message
+containing one could **forge extra fields** on the far side. There is a test for that.
+
+**Cost:** `encode`/`decode` are now **async** (`CompressionStream` is a streaming API), which
+rippled into `showEnding`, the maker's click handler, and boot. All awaited, all tested.
+
+*A measurement lesson:* my first benchmark said deflate saved 95% on every message — because
+I tested with `"x" * 280`, which compresses to nothing and is nothing like real writing. And
+my second was worse: I built two separate compressor objects and took `.compress()` from one
+and `.flush()` from the other, so it measured an **empty stream** and printed the same number
+for every input. **A benchmark that reports the same figure for wildly different inputs is
+broken, not impressive.**
+
+---
+
+## Day 5 — 2026-07-13
+
+**Goal:** the escalating-hint system, and the first real puzzle.
+**Status:** done. The lion's riddle is real. 41 tests, all passing.
+
+### Shipped
+
+- **`js/game/hints.js`** — one controller, will drive all three puzzles.
+- **`js/game/puzzles/answers.js`** — normalisation + fuzzy matching.
+- **`js/game/puzzles/riddle.js`** — act 1, for real.
+- **`tests/riddle.test.html`** — 41 tests.
+- Balaji's riddle replaces mine (his is better — it is about memory without ever
+  naming it, and "lost without ever being stolen" *is* the story). Answer: **memory**.
+- **Dialogue: click ANYWHERE to advance**, plus a retro **SKIP ▸▸** (and Escape).
+- **Custom names in the link.** Defaults stay `boy`/`girl`.
+- Fixed two lines of dialogue that described a colorLevel that wasn't on screen.
+
+### The hint system IS the pacing system
+
+Not a safety net bolted on the side. A riddle + a sliding puzzle + a morse decode, played
+honestly, is 12-18 minutes. **The clock is the only thing that makes this a 7-minute game.**
+It escalates on whichever comes first:
+
+1. time on the puzzle (20s / 45s / 70s / 95s / 120s),
+2. two wrong answers at a level,
+3. **the player asking** — same code path, but it was *her choice*. That turns a
+   condescending system into an act of agency: you turn to the person beside you and ask.
+
+**The clock PAUSES while dialogue is open.** Never hint-nag someone for reading.
+
+**Deliberately cumulative, not idle-reset.** An idle timer that resets on every keystroke
+means someone typing slowly forever never reaches the ceiling — and the ceiling is the
+whole point.
+
+> **⚠ TWO CLAIMS HERE WERE LATER PROVED WRONG. See day 6.**
+>
+> 1. *"120s = auto-solve, on every puzzle."* **No.** The clock may only auto-solve the
+>    RIDDLE. On the sliding puzzle the clock may only **talk** (`clockCeiling`).
+> 2. *"There is no skip button."* There is now — but only for **dialogue**, and it skips
+>    only the current run. No puzzle has one.
+
+### Dialogue: click anywhere, and a skip
+
+Two asks from Balaji, both right:
+
+- **Click anywhere advances.** Having to hit the box exactly is a small, constant tax.
+- **A retro SKIP, top-right.** It skips **only the current run of lines** — the next scene
+  still talks. Someone replaying to reach the ending shouldn't sit through the intro again,
+  but should still get the lion.
+
+**The hazard in "click anywhere":** the button that dismisses a puzzle resolves a promise,
+and the dialogue that follows can open **inside that same click's dispatch** — so one click
+would open the box AND instantly eat its first line. A 220ms guard, and a test that proves
+it. (`tests/dialogue.test.html`, 14 tests.)
+
+*A test-writing lesson from that suite:* the first version asserted on a 3-letter line,
+which finishes typing in 70ms — long before the guard expires — so the click advanced PAST
+it and tested nothing. Then a longer line was still flaky, because **a background tab
+throttles setTimeout** and the typewriter raced the test's own clock. **A test that depends
+on wall-clock timing fails at random.** Fixed with a line long enough that no throttling can
+finish it.
+
+### Custom names, carried in the link
+
+Defaults are `boy` / `girl`. The maker has two optional fields whose **placeholders ARE the
+defaults**, so leaving them blank is a choice rather than an omission.
+
+Three things this needed, because names come out of the URL and are therefore just as
+attacker-controlled as the message:
+- **Blank names are DROPPED, not carried as empty strings** — an empty name would blank out
+  a speaker tag on the far side, and a nameless speaker reads as a bug.
+- **Capped at 24 chars, no newlines.** A name is one line.
+- **Same `safeRender` path as everything else.** A name containing `<img onerror=…>` renders
+  as literal text. Tested.
+
+Defaults are lowercase (`boy`, not `BOY`) — CSS uppercases the speaker tag anyway, and it
+makes the hint button read *"ask girl again"* rather than *"ask GIRL again"*.
+
+### ⚠ Dialogue that described a colorLevel which wasn't on screen
+
+Both bugs were the same bug: the lines were written before we knew what each colour level
+would actually LOOK like. Balaji caught both by playing it.
+
+- **After the lion, `colorLevel` is 0.33 — the sky is still 33% saturated, i.e. still GREY.**
+  The line was *"The sky. Look at the sky."* It pointed at the one thing that had **not**
+  changed. What HAS changed at 0.33 is growth wave 0: **the first leaves on every tree.**
+  Now it points at that.
+- **When the bench comes into view, the house is solved and `colorLevel` is 0.66 — colour is
+  MOSTLY back.** So *"the only thing in this world that isn't grey"* is a statement the
+  player can SEE is false. The beat is now **recognition, not contrast**: *"It never stopped
+  being red, did it." / "...I know it." / "So do I."*
+
+**Lesson:** check what is actually rendered at a given state before writing a line that
+points at it. `python3` + the growth-wave table took ten seconds and settled both.
+
+### ⚠ The bug that would have broken the gift
+
+The answer matcher rejected **"meomry"**.
+
+Plain Levenshtein scores a **transposition as TWO edits**, so a swap of two adjacent
+letters failed the `<= 1` tolerance — and transposing two letters is the single most common
+typing mistake there is. She types the right answer, the game says no, and she has no way
+to tell whether she is wrong or merely mistyped.
+
+→ *Fix:* **Damerau-Levenshtein** (optimal string alignment), which counts an adjacent swap
+as one edit. Needs three rows rather than two, because a transposition looks back two cells
+diagonally. `"money"` is still correctly rejected.
+
+The test caught it. That is exactly the class of bug that silently ruins the whole gift.
+
+### The matcher, generally
+
+The difficulty of a text riddle is never "is the answer right" — she knows the answer in
+seconds. It is **"does the game ACCEPT what she typed"**. So: lowercase, strip accents,
+strip punctuation, collapse whitespace, drop a leading article (`the memory` → `memory`),
+then exact-match **plus one edit**. Typo tolerance only applies to words of 5+ letters,
+where a one-character slip is unambiguous.
+
+Accepted in tests: `Memory`, `MEMORY`, `memory.`, `"memory"`, `memories`, `my memory`,
+`our memories`, `meomry`, `memry`, `memmory`, `memorie`, `mémory`.
+Rejected: `love`, `time`, `hope`, `money`, `nothing`, empty.
+
+**The lion never says "wrong."** It says something in character. A red X tells her she
+failed; a line of the lion's contempt tells her to keep going. At 1am on a birthday those
+are not the same thing.
+
+### Next
+
+- **Day 6:** sliding-tile puzzle. 3x3 (NOT 4x4 — a 15-puzzle is a 5-minute slog that would
+  wreck the pacing). Shuffle by applying random LEGAL MOVES, never a random permutation —
+  half of all 8-puzzle permutations are unsolvable. BFS the whole 181,440-state space once
+  at load for a perfect hint and a perfect auto-solve.
+- Day 7: morse + the photo-frame sprites.
+
 ---
 
 ## Day 4 — 2026-07-13

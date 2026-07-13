@@ -1,2 +1,5 @@
 .shots/
 .DS_Store
+
+# WAV masters — 44MB. Balaji keeps them; we ship the m4a.
+assets/_raw/audio/

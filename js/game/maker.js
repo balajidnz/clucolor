@@ -1,6 +1,7 @@
 // @ts-check
-import { buildLink, MAX_MESSAGE } from '../share/encode.js';
+import { buildLink, MAX_MESSAGE, MAX_NAME } from '../share/encode.js';
 import { safeRender } from '../share/render.js';
+import { NAMES } from '../../data/dialogue.js';
 
 /**
  * "Now write your own."
@@ -46,10 +47,52 @@ export function showMaker(root) {
   const counter = document.createElement('p');
   counter.className = 'maker-count';
 
+  /**
+   * The optional fields are HIDDEN until asked for.
+   *
+   * Four text boxes on screen at once makes the optional stuff compete with the
+   * only thing that matters — the message. Almost nobody will rename the
+   * characters; everybody will write the message. So the message gets the screen,
+   * and the rest is one quiet link away.
+   */
+  const more = document.createElement('button');
+  more.className = 'maker-more';
+  more.textContent = 'name them · sign it';
+
+  const extras = document.createElement('div');
+  extras.className = 'maker-extras';
+  extras.hidden = true;
+
+  const nameRow = document.createElement('div');
+  nameRow.className = 'maker-names';
+
+  const boy = document.createElement('input');
+  boy.className = 'maker-name';
+  boy.type = 'text';
+  boy.maxLength = MAX_NAME;
+  boy.placeholder = NAMES.boy;
+
+  const girl = document.createElement('input');
+  girl.className = 'maker-name';
+  girl.type = 'text';
+  girl.maxLength = MAX_NAME;
+  girl.placeholder = NAMES.girl;
+
+  nameRow.append(boy, girl);
+
   const from = document.createElement('input');
   from.className = 'maker-from';
   from.type = 'text';
+  from.maxLength = MAX_NAME;
   from.placeholder = 'from (optional)';
+
+  extras.append(nameRow, from);
+
+  more.addEventListener('click', () => {
+    extras.hidden = false;
+    more.hidden = true;
+    boy.focus();
+  });
 
   const make = document.createElement('button');
   make.className = 'panel-btn';
@@ -96,8 +139,14 @@ export function showMaker(root) {
   box.addEventListener('input', update);
   update();
 
-  make.addEventListener('click', () => {
-    const url = buildLink(box.value, from.value.trim() ? { from: from.value.trim() } : {});
+  make.addEventListener('click', async () => {
+    make.disabled = true;
+    const url = await buildLink(box.value, {
+      from: from.value.trim(),
+      boy: boy.value.trim(),
+      girl: girl.value.trim(),
+    });
+    make.disabled = false;
     link.value = url;
     result.hidden = false;
     safeRender(note, `${url.length} characters — short enough for any chat app.`);
@@ -132,7 +181,7 @@ export function showMaker(root) {
 
   row.append(copy, share);
   result.append(link, row, note);
-  panel.append(title, blurb, box, counter, from, make, result);
+  panel.append(title, blurb, box, counter, more, extras, make, result);
   root.append(panel);
 
   box.focus();

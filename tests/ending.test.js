@@ -12,7 +12,7 @@ window.addEventListener('error', (e) =>
   report(`THREW: ${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`, false));
 window.addEventListener('unhandledrejection', (e) => report(`REJECTED: ${e.reason}`, false));
 
-import { encode, decode, MAX_MESSAGE } from '../js/share/encode.js';
+import { encode, decode, MAX_MESSAGE, MAX_NAME } from '../js/share/encode.js';
 import { showEnding } from '../js/game/screens.js';
 import { showMaker } from '../js/game/maker.js';
 import { DEFAULT_MESSAGE } from '../data/dialogue.js';
@@ -27,13 +27,13 @@ const check = (name, ok, detail) =>
   results.push({ name, ok, ...(ok || detail === undefined ? {} : { detail: String(detail) }) });
 
 /** Mount showEnding against a given hash, in a detached root, and read it back. */
-function mount(hash) {
+async function mount(hash) {
   const prev = location.hash;
   location.hash = hash;
 
   const root = document.createElement('div');
   document.body.append(root);
-  showEnding(root);
+  await showEnding(root);   // async: it decodes the hash before it renders
 
   const panel = root.querySelector('.panel-ending');
   const msg = root.querySelector('.ending-message');
@@ -47,27 +47,27 @@ function mount(hash) {
 
 {
   const text = 'happy birthday.\nI would find you in any world.';
-  const { root, msg } = mount('#m=' + encode({ v: 1, msg: text }));
+  const { root, msg } = await mount('#m=' + await encode({ v: 1, msg: text }));
   check('custom message decodes and renders', msg.textContent === text, msg.textContent);
   check('newline preserved (pre-wrap, not <br>)', msg.textContent.includes('\n'));
   root.remove();
 }
 
 {
-  const { root, msg } = mount('');
+  const { root, msg } = await mount('');
   check('no hash -> DEFAULT_MESSAGE', msg.textContent === DEFAULT_MESSAGE, msg.textContent);
   root.remove();
 }
 
 {
-  const { root, msg } = mount('#m=!!!garbage!!!');
+  const { root, msg } = await mount('#m=!!!garbage!!!');
   check('malformed hash -> DEFAULT_MESSAGE (never blank, never throws)',
     msg.textContent === DEFAULT_MESSAGE, msg.textContent);
   root.remove();
 }
 
 {
-  const { root, from } = mount('#m=' + encode({ v: 1, msg: 'x', from: 'balaji' }));
+  const { root, from } = await mount('#m=' + await encode({ v: 1, msg: 'x', from: 'balaji' }));
   check('from line renders', from?.textContent === '— balaji', from?.textContent);
   root.remove();
 }
@@ -76,7 +76,7 @@ function mount(hash) {
 
 {
   const text = 'i love you 💖 ❤️';
-  const { root, msg } = mount('#m=' + encode({ v: 1, msg: text }));
+  const { root, msg } = await mount('#m=' + await encode({ v: 1, msg: text }));
   check('emoji survives the round trip (btoa would throw on it)', msg.textContent === text, msg.textContent);
   root.remove();
 }
@@ -92,7 +92,7 @@ const PAYLOADS = [
 ];
 
 for (const payload of PAYLOADS) {
-  const { root, panel, msg } = mount('#m=' + encode({ v: 1, msg: payload }));
+  const { root, panel, msg } = await mount('#m=' + await encode({ v: 1, msg: payload }));
 
   const asText = msg.textContent === payload;
   // The real assertion: no ELEMENT was ever created from the payload.
@@ -131,13 +131,18 @@ for (const payload of PAYLOADS) {
     counter.textContent === `${[...typed].length} / ${MAX_MESSAGE}`, counter.textContent);
 
   from.value = 'someone';
+  root.querySelectorAll('.maker-name')[0].value = 'Ravi';
+  root.querySelectorAll('.maker-name')[1].value = 'Anu';
   make.click();
+  await new Promise((r) => setTimeout(r, 60)); // the handler compresses; let it finish
 
-  const decoded = decode(new URL(link.value).hash);
+  const decoded = await decode(new URL(link.value).hash);
   check('maker -> link -> decode round-trips the message',
     decoded?.msg === typed, decoded?.msg);
   check('maker -> link -> decode round-trips "from"',
     decoded?.from === 'someone', decoded?.from);
+  check('maker: names ride into the link',
+    decoded?.boy === 'Ravi' && decoded?.girl === 'Anu', `${decoded?.boy}/${decoded?.girl}`);
   check('maker: link points at this page', link.value.startsWith(location.origin));
 
   // Test the PAYLOAD, not the whole hash — `#m=` legitimately contains an '='.
@@ -154,11 +159,53 @@ for (const payload of PAYLOADS) {
   root.remove();
 }
 
+// --- custom names -------------------------------------------------------------
+//
+// The sender can name the two of them. The names ride in the URL, which means
+// they are attacker-controlled too, and get the same treatment as the message.
+
+{
+  const p = await decode('#m=' + await encode({ v: 1, msg: 'x', boy: 'Ravi', girl: 'Anu' }));
+  check('names round-trip through the link', p?.boy === 'Ravi' && p?.girl === 'Anu',
+    `${p?.boy}/${p?.girl}`);
+}
+
+{
+  const p = await decode('#m=' + await encode({ v: 1, msg: 'x' }));
+  check('no names in the link -> undefined, so the caller falls back to defaults',
+    p?.boy === undefined && p?.girl === undefined, `${p?.boy}/${p?.girl}`);
+}
+
+{
+  // An empty or whitespace name must NOT ride along — it would blank out the
+  // speaker tag on the far side, and a nameless speaker looks like a bug.
+  const p = await decode('#m=' + await encode({ v: 1, msg: 'x', boy: '   ', girl: '' }));
+  check('blank names are dropped, not carried as empty strings',
+    p?.boy === undefined && p?.girl === undefined, `${p?.boy}/${p?.girl}`);
+}
+
+{
+  const p = await decode('#m=' + await encode({ v: 1, msg: 'x', boy: 'z'.repeat(100) }));
+  check(`over-long name clamped to ${MAX_NAME}`, p?.boy?.length === MAX_NAME, p?.boy?.length);
+}
+
+{
+  const p = await decode('#m=' + await encode({ v: 1, msg: 'x', boy: 'line\nbreak' }));
+  check('a name cannot contain a newline (it is one line, not a message)',
+    !p?.boy?.includes('\n'), JSON.stringify(p?.boy));
+}
+
+{
+  const p = await decode('#m=' + await encode({ v: 1, msg: 'x', boy: '<img src=x onerror=alert(1)>' }));
+  check('a hostile name survives only as inert text', typeof p?.boy === 'string' && p.boy.includes('<img'),
+    p?.boy);
+}
+
 // --- the cap ------------------------------------------------------------------
 
 {
   const long = 'a'.repeat(500);
-  const { root, msg } = mount('#m=' + encode({ v: 1, msg: long }));
+  const { root, msg } = await mount('#m=' + await encode({ v: 1, msg: long }));
   check(`over-long message clamped to ${MAX_MESSAGE}`,
     [...msg.textContent].length === MAX_MESSAGE, [...msg.textContent].length);
   root.remove();
@@ -188,8 +235,8 @@ summary.textContent = failed.length ? `${failed.length} of ${results.length} FAI
 summary.className = 'sub ' + (failed.length ? 'fail' : 'ok');
 
 // A live one, so a human can look at it and confirm the payload is just text.
-location.hash = '#m=' + encode({ v: 1, msg: '<img src=x onerror=alert(1)>\nthis should be literal text', from: 'the attacker' });
-showEnding(document.getElementById('live'));
+location.hash = '#m=' + await encode({ v: 1, msg: '<img src=x onerror=alert(1)>\nthis should be literal text', from: 'the attacker' });
+await showEnding(document.getElementById('live'));
 
 await fetch('/__report', {
   method: 'POST',

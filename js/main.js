@@ -6,13 +6,18 @@ import { loadImages } from './engine/assets.js';
 import { drawCharacter } from './engine/sprites.js';
 import { createTween } from './engine/tween.js';
 import { createFade } from './engine/fade.js';
+import { createAudio } from './engine/audio.js';
 import { gradeFilter, tintOpacity } from './game/colorGrade.js';
 import { loadCharacter, frameFor } from './game/characters.js';
 import { createDialogue } from './game/dialogue.js';
 import { createStory, LION_X, HOUSE_X } from './game/story.js';
-import { showTitle, showPlaceholderPuzzle, showEnding } from './game/screens.js';
+import { showLoading, showLogo, showPicker, showPlaceholderPuzzle, showEnding, mountMuteButton } from './game/screens.js';
+import { showRiddle } from './game/puzzles/riddle.js';
+import { showSlider, prewarm as prewarmSlider } from './game/puzzles/slider.js';
+import { showMorse } from './game/puzzles/morse.js';
 import { drawInterior, FLOOR_Y, CHAR_SCALE } from './game/interior.js';
 import { NAMES, DIALOGUE } from '../data/dialogue.js';
+import { decode } from './share/encode.js';
 import {
   W, H, GROUND_Y, LEVEL_W,
   createAtlases, drawWorld, drawBench, drawProps,
@@ -55,6 +60,10 @@ const wctx = worldBuf.getContext('2d');
 if (!wctx) throw new Error('no 2d context');
 wctx.imageSmoothingEnabled = false;
 
+// Up FIRST — before a single byte is fetched. Everything below this line takes
+// time, and without this the page is blank black while it does.
+const loading = showLoading(document.getElementById('ui'));
+
 const [images, boy, girl] = await Promise.all([
   loadImages({
     tiles: 'assets/img/tiles/tiles.png',
@@ -64,14 +73,39 @@ const [images, boy, girl] = await Promise.all([
     lion: 'assets/img/props/lion.png',
     house: 'assets/img/props/house.png',
     room: 'assets/img/rooms/house.png',
+    photo: 'assets/img/props/photo.png',
   }),
   loadCharacter('boy'),
   loadCharacter('girl'),
 ]);
 
 const atlases = createAtlases(images);
+
+// Build the 8-puzzle search table now, while assets are settling — never during
+// a click, and never during the fade into the house.
+prewarmSlider();
 const input = createInput(stage);
-const dialogue = createDialogue(ui, NAMES);
+
+/**
+ * Anything that needs the game clock — currently the hint timers, which must
+ * advance in game time so they PAUSE while dialogue is open. A puzzle that
+ * hint-nagged you for reading would be its own kind of insult.
+ */
+/** @type {Set<(dt: number) => void>} */
+const tickers = new Set();
+/** @param {(dt: number) => void} fn @returns {() => void} unsubscribe */
+const onTick = (fn) => { tickers.add(fn); return () => tickers.delete(fn); };
+/**
+ * Names come from the link, if it carries them. A sender can call the two of them
+ * whatever they like; everyone else gets "boy" and "girl".
+ */
+const sent = await decode(location.hash);
+const names = {
+  boy: sent?.boy ?? NAMES.boy,
+  girl: sent?.girl ?? NAMES.girl,
+};
+
+const dialogue = createDialogue(ui, names);
 const fade = createFade($('fade'));
 const color = createTween(0);
 
@@ -82,6 +116,8 @@ const state = {
   playerIsBoy: true,
   /** 'road' | 'house' */
   scene: 'road',
+  /** The photograph on the wall stays mended once you have mended it. */
+  photoMended: false,
   player: { x: 60, facing: 1, moving: false, t: 0 },
   companion: { x: 20, facing: 1, moving: false, t: 0 },
   camera: { x: 0 },
@@ -119,19 +155,41 @@ async function setScene(inside) {
   await fade.in(650);
 }
 
+/** @type {Awaited<ReturnType<typeof createAudio>>} */
+let audio = null;
+
+/** colorLevel 0 / .33 / .66 / 1 -> layers 0 / 0-1 / 0-2 / 0-3. Cumulative. */
+const stageFor = (/** @type {number} */ c) => Math.round(c * 3);
+
 const story = createStory({
   dialogue,
-  setColor: (to) => color.to(color.value, to, 2.2),
-  runPuzzle: (s) => showPlaceholderPuzzle(ui, s.id),
+  setColor: (to) => {
+    // The music turns with the world, over the same 2.2 seconds.
+    // The music does not SWAP — it GROWS. Every layer up to this stage plays.
+    audio?.unlock(stageFor(to));
+    return color.to(color.value, to, 2.2);
+  },
+  runPuzzle: (s) => {
+    const companionName = state.playerIsBoy ? names.girl : names.boy;
+    const deps = { onTick, isPaused: () => dialogue.open, companionName };
+
+    if (s.id === 'lion') return showRiddle(ui, deps);
+    if (s.id === 'house') {
+      return showSlider(ui, deps).then(() => { state.photoMended = true; });
+    }
+    if (s.id === 'bench') return showMorse(ui, deps);
+    return showPlaceholderPuzzle(ui, s.id);
+  },
   playerIsBoy: () => state.playerIsBoy,
   setScene,
-  onFinished: () => showEnding(ui),
+  onFinished: () => { void showEnding(ui); },
 });
 
 /** @param {number} dt */
 function update(dt) {
   color.update(dt);
   state.t += dt;
+  for (const tick of tickers) tick(dt);
 
   const p = state.player;
   const cm = state.companion;
@@ -181,7 +239,7 @@ function render() {
 
   // 1. the world (or the room), into its own buffer
   if (indoors) {
-    drawInterior(wctx, images.room, bloom);
+    drawInterior(wctx, images.room, images.photo, state.photoMended);
   } else {
     drawWorld(wctx, atlases, cam, bloom, state.t);
     drawProps(wctx, images.lion, images.house, cam, LION_X, HOUSE_X);
@@ -211,11 +269,25 @@ function render() {
   ctx.filter = 'none';
 
   tint.style.opacity = tintOpacity(bloom).toFixed(3);
+  audio?.setColor(bloom);
 }
 
 // --- boot -------------------------------------------------------------------
 
 startLoop(update, render);
 
-state.playerIsBoy = await showTitle(ui);
+loading.done();
+
+// Logo -> press to start -> who are you.
+await showLogo(ui);
+
+// Straight after that click: browsers refuse to start an AudioContext without a
+// user gesture, and all four layers must be started together inside it or they
+// will never be in sync. If it fails, the game plays on in silence rather than
+// not at all.
+audio = await createAudio();
+if (audio) mountMuteButton(ui, audio);
+
+state.playerIsBoy = await showPicker(ui, names);
+
 await story.begin();

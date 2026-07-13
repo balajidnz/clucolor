@@ -14,7 +14,7 @@
 <script type="module">
 import { runSpec } from '../tools/encode.spec.js';
 
-const results = runSpec();
+const results = await runSpec();
 const failed = results.filter((r) => !r.ok);
 
 const list = document.getElementById('results');

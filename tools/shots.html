@@ -32,6 +32,7 @@ const images = await loadImages({
   lion: '../assets/img/props/lion.png',
   house: '../assets/img/props/house.png',
   room: '../assets/img/rooms/house.png',
+  photo: '../assets/img/props/photo.png',
 });
 const atlases = createAtlases(images);
 
@@ -103,7 +104,7 @@ const out = document.getElementById('out');
 {
   const { drawInterior, FLOOR_Y, CHAR_SCALE } = await import('../js/game/interior.js');
 
-  for (const [name, color] of [['i-house-inside', 0.33], ['i-house-solved', 0.66]]) {
+  for (const [name, color, solved] of [['i-house-inside', 0.33, false], ['i-house-solved', 0.66, true]]) {
     const buf = document.createElement('canvas');
     buf.width = W; buf.height = H;
     const b = buf.getContext('2d');
@@ -113,7 +114,7 @@ const out = document.getElementById('out');
     room.width = W; room.height = H;
     const rc = room.getContext('2d');
     rc.imageSmoothingEnabled = false;
-    drawInterior(rc, images.room, color);
+    drawInterior(rc, images.room, images.photo, solved);
 
     b.filter = gradeFilter(color);
     b.drawImage(room, 0, 0);

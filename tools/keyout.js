@@ -44,12 +44,90 @@ export function keyOutCheckerboard(canvas, log = () => {}) {
   }
   log('*** alpha is FAKE — the checkerboard is painted in. keying out. ***');
 
-  /** 0 = not checker, 1 = darker square, 2 = lighter square. */
+  /**
+   * LEARN the two checker shades from the border. Do not hardcode them.
+   *
+   * The first version of this had the bench image's checks baked in (205 and 254,
+   * with a floor of r > 180). The logo's checkerboard is 125 and 192 — the dark
+   * square was below the floor, so nothing was recognised and nothing was erased.
+   * The generator does not use one fixed checkerboard, so the keyer cannot assume
+   * one.
+   *
+   * The border of a keyed image is, by definition, all checkerboard. So: take the
+   * neutral pixels around the edge, and the two brightness clusters there ARE the
+   * two squares.
+   */
+  /**
+   * How far the channels may differ and still count as "grey".
+   *
+   * 30, not 14. The generator's output carries a faint WARM CAST, so its
+   * checkerboard is not truly neutral — the anti-aliased pixels along every check
+   * edge come out as rgb(160,160,144), rgb(160,144,144) and so on, differing by
+   * 16-32. At a tolerance of 14 they failed the test, were never classified, and
+   * survived as a halo (and as a watermark that stretched the crop box).
+   *
+   * Loose is safe here: the subjects are BLUE, ORANGE, RED — channels 150+ apart.
+   * Nothing that is actually coloured comes close to 30.
+   */
+  const GREY_TOL = 30;
+  const isGrey = (/** @type {number} */ r, /** @type {number} */ g, /** @type {number} */ b) =>
+    Math.abs(r - g) < GREY_TOL && Math.abs(g - b) < GREY_TOL && Math.abs(r - b) < GREY_TOL;
+
+  const border = [];
+  const ring = (/** @type {number} */ x, /** @type {number} */ y) => {
+    const i = (y * W + x) * 4;
+    if (isGrey(data[i], data[i + 1], data[i + 2])) border.push(data[i]);
+  };
+  for (let x = 0; x < W; x++) { ring(x, 0); ring(x, H - 1); }
+  for (let y = 0; y < H; y++) { ring(0, y); ring(W - 1, y); }
+
+  if (border.length < 32) {
+    log('could not read a checkerboard on the border — leaving the image alone');
+    return false;
+  }
+
+  // Two clusters: split at the midpoint of the range, then take each side's mean.
+  const lo = Math.min(...border);
+  const hi = Math.max(...border);
+  const mid = (lo + hi) / 2;
+  const dark = border.filter((v) => v <= mid);
+  const light = border.filter((v) => v > mid);
+
+  const DARK = dark.length ? dark.reduce((a, b) => a + b, 0) / dark.length : lo;
+  const LIGHT = light.length ? light.reduce((a, b) => a + b, 0) / light.length : hi;
+  const TOL = Math.max(14, (LIGHT - DARK) * 0.35);
+
+  log(`learned checker shades: ${Math.round(DARK)} and ${Math.round(LIGHT)} (tolerance ±${Math.round(TOL)})`);
+
+  if (LIGHT - DARK < 10) {
+    log('the two shades are indistinguishable — refusing to key, it would eat the subject');
+    return false;
+  }
+
+  /**
+   * 0 = not checker, 1 = darker square, 2 = lighter square.
+   *
+   * The band is CONTINUOUS from DARK-TOL to LIGHT+TOL, not two separate windows.
+   * Two windows leave a gap in the middle — and the renderer anti-aliases the two
+   * squares into each other, so the pixels along every checker edge land exactly
+   * in that gap, are classified as neither, and survive as a pale halo around the
+   * subject.
+   *
+   * The midpoint is then only used to tell the two shades APART, which is what the
+   * both-shades test needs.
+   */
+  const MIDPOINT = (DARK + LIGHT) / 2;
+  const FLOOR = DARK - TOL;
+
+  // NO upper bound. The generator also stamps a near-WHITE sparkle watermark
+  // (~240), which sits above any ceiling derived from the checker shades — so a
+  // ceiling leaves the watermark behind as a ghost in the corner. Everything
+  // neutral and light enough is a candidate; connectivity and the both-shades
+  // test are what protect the subject's own highlights.
   const shade = (/** @type {number} */ i) => {
     const r = data[i], g = data[i + 1], b = data[i + 2];
-    const neutral = Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && Math.abs(r - b) < 12;
-    if (!neutral || r < 180) return 0;
-    return r >= 235 ? 2 : 1;
+    if (!isGrey(r, g, b) || r < FLOOR) return 0;
+    return r >= MIDPOINT ? 2 : 1;
   };
 
   const seen = new Uint8Array(W * H);
@@ -131,6 +209,83 @@ export function keyOutCheckerboard(canvas, log = () => {}) {
   cx.putImageData(img, 0, 0);
   log(`erased ${((erased / (W * H)) * 100).toFixed(1)}% as background`);
   return true;
+}
+
+/**
+ * Erase the generator's sparkle watermark by INPAINTING it.
+ *
+ * Cloning a patch from elsewhere does not work here: the watermark sits on a
+ * narrow diagonal strip of red bench, and there is no clean patch of bench big
+ * enough to copy from — copy from above and you paste grass into the bench.
+ *
+ * Instead: mask the sparkle's own pixels (it is a pale, desaturated overlay on a
+ * saturated red background, so it is easy to tell apart), then grow the
+ * surrounding pixels inward over the mask, one ring at a time. Colours are COPIED
+ * from real neighbours rather than averaged, so no new colours are invented and
+ * the pixel art stays pixel art.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {{x: number, y: number, w: number, h: number}} box  where to look
+ * @param {(msg: string) => void} [log]
+ */
+export function inpaintSparkle(canvas, box, log = () => {}) {
+  const W = canvas.width;
+  const cx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!cx) throw new Error('no 2d context');
+
+  const img = cx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = img.data;
+
+  // The sparkle is PALE and DESATURATED. The bench beneath it is a saturated red
+  // (green and blue channels are low). That gap is the whole detector.
+  const isSparkle = (/** @type {number} */ i) => {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    return r > 170 && Math.min(g, b) > 105;
+  };
+
+  /** @type {Set<number>} */
+  const masked = new Set();
+  for (let y = box.y; y < box.y + box.h; y++) {
+    for (let x = box.x; x < box.x + box.w; x++) {
+      const p = y * W + x;
+      if (isSparkle(p * 4)) masked.add(p);
+    }
+  }
+
+  log(`sparkle: masked ${masked.size}px inside ${box.w}x${box.h} at (${box.x},${box.y})`);
+  if (!masked.size) return;
+
+  // Grow inward from the boundary. Each pass fills only the masked pixels that
+  // already touch a known one, so the fill follows the bench's stripes in from
+  // the edges rather than smearing a single colour across the hole.
+  let pass = 0;
+  while (masked.size && pass < 60) {
+    /** @type {[number, number][]} */
+    const filled = [];
+
+    for (const p of masked) {
+      const neighbours = [p - 1, p + 1, p - W, p + W].filter((n) => !masked.has(n));
+      if (!neighbours.length) continue;
+      // Copy, never average: averaging invents colours that are not in the palette.
+      filled.push([p, neighbours[0]]);
+    }
+
+    if (!filled.length) break;
+
+    for (const [p, src] of filled) {
+      const d = p * 4;
+      const s = src * 4;
+      data[d] = data[s];
+      data[d + 1] = data[s + 1];
+      data[d + 2] = data[s + 2];
+      data[d + 3] = 255;
+      masked.delete(p);
+    }
+    pass++;
+  }
+
+  cx.putImageData(img, 0, 0);
+  log(`sparkle: inpainted in ${pass} passes, ${masked.size}px left`);
 }
 
 /**

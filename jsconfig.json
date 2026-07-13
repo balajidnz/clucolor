@@ -8,5 +8,5 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["js/**/*.js", "data/**/*.js", "tools/**/*.mjs"]
+  "include": ["js/**/*.js", "data/**/*.js", "tools/**/*.js"]
 }

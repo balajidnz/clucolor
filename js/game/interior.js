@@ -32,36 +32,47 @@ export const FLOOR_Y = 244;
 export const CHAR_SCALE = 2;
 
 /**
- * The broken frame, placed in the bare stretch of wall the room image leaves
- * empty in the middle. This is the only part of the room the game DRAWS, because
- * it is the only part that is interactive.
+ * The broken frame, in the bare stretch of wall the room image leaves empty.
+ * This is the only part of the room the game DRAWS, because it is the only part
+ * that is interactive.
+ *
+ * 72 = 3 x 24, and the photo is 144 = 3 x 48 — so it draws at exactly half size,
+ * an integer downscale that keeps the pixels square.
  */
-export const BROKEN_FRAME = { x: W / 2, y: 64, w: 78, h: 66 };
+export const BROKEN_FRAME = { x: W / 2, y: 60, w: 72, h: 72 };
+
+/** How the pieces sit in the wall before anyone touches them. Fixed, so the
+ *  frame on the wall looks the same every time you walk in. */
+const WALL_SCRAMBLE = [4, 0, 6, 2, 7, 1, 5, 3, 8];
 
 /**
  * @param {CanvasRenderingContext2D} c
  * @param {HTMLImageElement} room
- * @param {number} bloom 0..1
+ * @param {HTMLImageElement} photo
+ * @param {boolean} solved
  */
-export function drawInterior(c, room, bloom) {
+export function drawInterior(c, room, photo, solved) {
   c.drawImage(room, 0, 0);
-  drawBrokenFrame(c, bloom);
+  drawFrame(c, photo, solved);
 }
 
 /**
- * A 3x3 grid with one piece missing — the sliding-tile puzzle's target. Stands
- * in until the real puzzle lands (day 6), at which point the DOM grid takes over
- * and this becomes just the empty frame behind it.
+ * The photograph, in pieces — or whole.
+ *
+ * The frame on the wall shows the REAL photo, scrambled, with the bottom-right
+ * piece missing. Once the puzzle is solved it shows the picture complete, so
+ * walking back out of the house you pass a mended photograph on the wall.
  *
  * @param {CanvasRenderingContext2D} c
- * @param {number} bloom
+ * @param {HTMLImageElement} photo  144x144
+ * @param {boolean} solved
  */
-function drawBrokenFrame(c, bloom) {
+function drawFrame(c, photo, solved) {
   const f = BROKEN_FRAME;
   const x = Math.round(f.x - f.w / 2);
   const y = Math.round(f.y);
 
-  // Moulding — gilt, so it reads as the one frame that matters.
+  // Gilt moulding, so it reads as the one frame that matters.
   c.fillStyle = '#8f7119';
   c.fillRect(x - 4, y - 4, f.w + 8, f.h + 8);
   c.fillStyle = '#c9a227';
@@ -69,27 +80,24 @@ function drawBrokenFrame(c, bloom) {
   c.fillStyle = '#7a5f14';
   c.fillRect(x - 3, y + f.h + 1, f.w + 6, 2);
 
-  const cols = 3;
-  const rows = 3;
-  const tw = Math.floor(f.w / cols);
-  const th = Math.floor(f.h / rows);
-
-  for (let r = 0; r < rows; r++) {
-    for (let col = 0; col < cols; col++) {
-      const i = r * cols + col;
-
-      if (i === 8) {
-        c.fillStyle = '#241d1a'; // the gap
-        c.fillRect(x + col * tw, y + r * th, tw, th);
-        continue;
-      }
-
-      // Scrambled: the shade of each piece is deliberately out of order, so it
-      // reads as a picture in pieces rather than a picture.
-      const base = 118 + ((i * 53) % 88);
-      const warm = Math.round(base * (0.78 + 0.22 * bloom));
-      c.fillStyle = `rgb(${warm + 26},${warm},${Math.round(warm * 0.82)})`;
-      c.fillRect(x + col * tw, y + r * th, tw - 1, th - 1);
-    }
+  if (solved) {
+    c.drawImage(photo, x, y, f.w, f.h);
+    return;
   }
+
+  const SRC = 48; // one piece, in the photo
+  const DST = 24; // one piece, on the wall
+
+  c.fillStyle = '#241d1a';
+  c.fillRect(x, y, f.w, f.h);
+
+  WALL_SCRAMBLE.forEach((tile, slot) => {
+    if (tile === 8) return; // the hole
+
+    c.drawImage(
+      photo,
+      (tile % 3) * SRC, Math.floor(tile / 3) * SRC, SRC, SRC,
+      x + (slot % 3) * DST, y + Math.floor(slot / 3) * DST, DST, DST,
+    );
+  });
 }

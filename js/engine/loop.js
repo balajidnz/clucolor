@@ -17,7 +17,20 @@ export function startLoop(update, render) {
   /** @param {number} now */
   function frame(now) {
     if (!running) return;
-    const dt = Math.min((now - last) / 1000, MAX_DT);
+
+    // Clamped at BOTH ends.
+    //
+    // The upper clamp stops alt-tabbing away and back from teleporting the player
+    // across the level in one 4-second frame.
+    //
+    // The LOWER clamp matters just as much: a rAF timestamp is the time the frame
+    // BEGAN, which can be earlier than the performance.now() captured just before
+    // requestAnimationFrame was called. So the first dt is often slightly
+    // NEGATIVE. Anything integrating time then goes backwards — an animation clock
+    // reaches -0.007, Math.floor(-0.007 * fps) % frames is -1, and indexing a
+    // frame array with -1 yields undefined, which explodes far away inside
+    // drawImage with no hint as to why.
+    const dt = Math.max(0, Math.min((now - last) / 1000, MAX_DT));
     last = now;
 
     update(dt);

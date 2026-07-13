@@ -122,9 +122,9 @@ def main() -> None:
     server = ThreadingHTTPServer(("0.0.0.0", port), handler)
 
     print(f"\n  {BOLD}CluColor{OFF} dev server")
-    print(f"  laptop   {BOLD}http://localhost:{port}/{OFF}")
+    print(f"  game     {BOLD}http://localhost:{port}/{OFF}")
     print(f"  android  {DIM}http://{lan_ip()}:{port}/{OFF}   (same wifi)")
-    print(f"  tests    {DIM}http://localhost:{port}/tests/encode.test.html{OFF}\n")
+    print(f"  tests    {DIM}http://localhost:{port}/tests/{OFF}\n")
     sys.stdout.flush()
 
     try:

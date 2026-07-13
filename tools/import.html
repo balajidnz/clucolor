@@ -13,7 +13,7 @@
 
 <script type="module">
 import { loadImage } from '../js/engine/assets.js';
-import { keyOutCheckerboard, contentBounds } from './keyout.js';
+import { keyOutCheckerboard, contentBounds, inpaintSparkle } from './keyout.js';
 
 /**
  * Turns the generated renders into game-ready sprites:
@@ -22,6 +22,8 @@ import { keyOutCheckerboard, contentBounds } from './keyout.js';
  * Never smoothing: averaging blurs pixel art. Run once, offline; the results are
  * committed and the game never does this work.
  */
+// NOTE: the ice-cream photo's raw source was deliberately deleted. Its sprite
+// (assets/img/props/photo.png) ships as-is and cannot be re-derived.
 const JOBS = [
   {
     name: 'lion',
@@ -35,6 +37,17 @@ const JOBS = [
     src: '../assets/_raw/house-exterior.png',
     key: true,
     // ~3x a person, so it reads as a real building beside the 38px characters.
+    targetH: 130,
+  },
+  {
+    name: 'logo',
+    src: '../assets/_raw/logo.png',
+    // This one came back from a background remover, so its alpha is REAL — the
+    // keyer detects that and only crops. But the remover also ANTI-ALIASED the
+    // edges, which destroyed the pixel grid (run lengths of 2,3,4,5... instead of
+    // clean multiples). So it is no longer pixel art, and must never be upscaled.
+    // Kept at native size; CSS only ever scales it DOWN, which is smooth and fine.
+    key: true,
     targetH: 130,
   },
   {
@@ -52,7 +65,17 @@ const shots = [];
 
 for (const job of JOBS) {
   log(`\n=== ${job.name} ===`);
-  const img = await loadImage(job.src);
+
+  // A missing source must not kill the whole pipeline — the other assets still
+  // need rebuilding, and one lost original should not block them.
+  let img;
+  try {
+    img = await loadImage(job.src);
+  } catch {
+    log(`!! SOURCE MISSING: ${job.src}`);
+    log('   skipping. The shipped sprite is unaffected, but it can no longer be re-derived.');
+    continue;
+  }
   log(`source: ${img.width}x${img.height}`);
 
   const src = document.createElement('canvas');
@@ -60,6 +83,9 @@ for (const job of JOBS) {
   src.height = img.height;
   const sc = src.getContext('2d', { willReadFrequently: true });
   sc.drawImage(img, 0, 0);
+
+  // No prompt can suppress the generator's watermark, so it comes off here.
+  if (job.sparkle) inpaintSparkle(src, job.sparkle, log);
 
   if (job.key) keyOutCheckerboard(src, log);
 
@@ -101,6 +127,36 @@ for (const job of JOBS) {
   out.append(p, prev);
 
   shots.push({ name: `import-${job.name}`, png: small.toDataURL('image/png') });
+}
+
+// --- favicon -----------------------------------------------------------------
+//
+// The red bench, alone on a grey field. It is not a decoration — it IS the game:
+// the one object exempt from the grey, the thing the whole story walks toward. A
+// tab icon of a red bench on grey says what the title screen says, in 16 pixels.
+{
+  const bench = await loadImage('../assets/img/props/bench.png'); // 45x30
+  const N = 64;
+
+  const fav = document.createElement('canvas');
+  fav.width = N; fav.height = N;
+  const fc = fav.getContext('2d');
+  fc.imageSmoothingEnabled = false;
+
+  fc.fillStyle = '#3f4654';   // the dead world
+  fc.fillRect(0, 0, N, N);
+  fc.fillStyle = '#4a5262';   // a hint of ground, so it is not floating
+  fc.fillRect(0, 44, N, N - 44);
+
+  // Centred, sitting ON the ground line. Integer position: no half-pixels.
+  fc.drawImage(bench, Math.round((N - 45) / 2), 44 - 30);
+
+  const p = document.createElement('p');
+  p.className = 'sub';
+  p.textContent = 'favicon — 64x64';
+  out.append(p, fav);
+  shots.push({ name: 'favicon', png: fav.toDataURL('image/png') });
+  log('\n=== favicon ===\nbuilt from the bench sprite, 64x64');
 }
 
 await fetch('/__shot', {

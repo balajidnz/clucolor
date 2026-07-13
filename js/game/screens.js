@@ -13,24 +13,94 @@ import { DEFAULT_MESSAGE } from '../../data/dialogue.js';
  */
 
 /**
- * Title screen. Also the user gesture that will unlock audio later: browsers
- * refuse to start an AudioContext without one, so a "press to begin" screen is
- * mandatory rather than decorative.
+ * The loading screen.
+ *
+ * Without it, the page is BLANK BLACK while ~1.5MB of images and audio come down.
+ * She opens a link and sees nothing — the worst first impression available, and on
+ * a slow connection it lasts long enough for her to close the tab.
  *
  * @param {HTMLElement} root
+ * @returns {{done: () => void}}
+ */
+export function showLoading(root) {
+  const panel = document.createElement('div');
+  panel.className = 'panel panel-loading';
+
+  const dot = document.createElement('div');
+  dot.className = 'loading-dot';
+
+  const word = document.createElement('p');
+  word.className = 'panel-sub';
+  word.textContent = 'loading';
+
+  panel.append(dot, word);
+  root.append(panel);
+
+  return {
+    done() {
+      panel.classList.add('is-done');
+      setTimeout(() => panel.remove(), 420);
+    },
+  };
+}
+
+/**
+ * The logo, and "press to start".
+ *
+ * This click is NOT decorative. Browsers refuse to start an AudioContext without a
+ * user gesture, so the game needs one before the music can exist at all — and all
+ * four layers must be started inside it, together, or they will never be in sync.
+ * The title screen is where that gesture is collected.
+ *
+ * @param {HTMLElement} root
+ * @returns {Promise<void>}
+ */
+export function showLogo(root) {
+  return new Promise((resolve) => {
+    const panel = document.createElement('div');
+    panel.className = 'panel panel-logo';
+
+    const logo = document.createElement('img');
+    logo.className = 'logo';
+    logo.src = 'assets/img/logo.png';
+    logo.alt = 'CluColor';
+    logo.width = 584;
+    logo.height = 130;
+
+    const press = document.createElement('button');
+    press.className = 'press-start';
+    press.textContent = 'press to start';
+
+    const go = () => {
+      document.removeEventListener('keydown', onKey);
+      panel.remove();
+      resolve();
+    };
+
+    /** @param {KeyboardEvent} e */
+    const onKey = (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); go(); }
+    };
+
+    panel.addEventListener('click', go);
+    document.addEventListener('keydown', onKey);
+
+    panel.append(logo, press);
+    root.append(panel);
+  });
+}
+
+/**
+ * Who are you?
+ *
+ * @param {HTMLElement} root
+ * @param {{boy: string, girl: string}} names  from the link, or the defaults
  * @returns {Promise<boolean>} true if the player chose to be the boy
  */
-export function showTitle(root) {
+export function showPicker(root, names) {
   return new Promise((resolve) => {
     const panel = document.createElement('div');
     panel.className = 'panel panel-title';
-
-    const h1 = document.createElement('h1');
-    h1.textContent = 'CluColor';
-
-    const tag = document.createElement('p');
-    tag.className = 'panel-sub';
-    tag.textContent = 'two people wake in a world with no colour';
 
     const ask = document.createElement('p');
     ask.className = 'panel-ask';
@@ -39,10 +109,15 @@ export function showTitle(root) {
     const row = document.createElement('div');
     row.className = 'panel-row';
 
-    for (const [who, isBoy] of /** @type {[string, boolean][]} */ ([['the boy', true], ['the girl', false]])) {
+    // The names may have been chosen by whoever sent the link, so they go through
+    // safeRender like any other text off the URL.
+    for (const [name, isBoy] of /** @type {[string, boolean][]} */ ([
+      [names.boy, true],
+      [names.girl, false],
+    ])) {
       const btn = document.createElement('button');
       btn.className = 'panel-btn';
-      btn.textContent = who;
+      safeRender(btn, name);
       btn.addEventListener('click', () => {
         panel.remove();
         resolve(isBoy);
@@ -50,9 +125,34 @@ export function showTitle(root) {
       row.append(btn);
     }
 
-    panel.append(h1, tag, ask, row);
+    panel.append(ask, row);
     root.append(panel);
   });
+}
+
+/**
+ * A mute toggle that stays on screen for the whole game.
+ *
+ * The title click is a real user gesture, so the music may legitimately start —
+ * but a stranger who has just opened a link should never feel trapped with sound
+ * they did not ask for. It is always one click away, always in the same place.
+ *
+ * @param {HTMLElement} root
+ * @param {{toggleMute: () => boolean}} audio
+ */
+export function mountMuteButton(root, audio) {
+  const btn = document.createElement('button');
+  btn.className = 'mute';
+  btn.title = 'sound';
+  btn.textContent = '♪';
+
+  btn.addEventListener('click', () => {
+    const muted = audio.toggleMute();
+    btn.classList.toggle('is-muted', muted);
+    btn.textContent = muted ? '✕' : '♪';
+  });
+
+  root.append(btn);
 }
 
 /**
@@ -109,8 +209,8 @@ export function showPlaceholderPuzzle(root, id) {
  *
  * @param {HTMLElement} root
  */
-export function showEnding(root) {
-  const payload = decode(location.hash);
+export async function showEnding(root) {
+  const payload = await decode(location.hash);
 
   const panel = document.createElement('div');
   panel.className = 'panel panel-ending';
@@ -131,14 +231,26 @@ export function showEnding(root) {
     panel.append(from);
   }
 
+  const row = document.createElement('div');
+  row.className = 'panel-row ending-offer';
+
   const offer = document.createElement('button');
-  offer.className = 'panel-btn ending-offer';
+  offer.className = 'panel-btn';
   offer.textContent = 'send this to someone';
   offer.addEventListener('click', () => {
     panel.remove();
     showMaker(root);
   });
-  panel.append(offer);
+
+  // Play it again. Without this she has to reload the page by hand, which is a
+  // silly thing to make someone do at the end of a gift.
+  const again = document.createElement('button');
+  again.className = 'panel-btn is-quiet';
+  again.textContent = 'again';
+  again.addEventListener('click', () => location.reload());
+
+  row.append(offer, again);
+  panel.append(row);
 
   root.append(panel);
 }

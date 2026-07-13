@@ -1,32 +1,15 @@
 // @ts-check
 
-/**
- * THE SCRIPT.
- *
- * ------------------------------------------------------------------------
- *  BALAJI — THIS IS A DRAFT. REWRITE IT.
- *
- *  The structure is what I'm confident about: where the beats land, how the
- *  hints escalate, where the colour lifts. The WORDS should be yours. I don't
- *  know how the two of you talk to each other, and that is the entire
- *  difference between a nice little game and a gift.
- *
- *  Read it out loud with a stopwatch. If the dialogue alone runs past ~4
- *  minutes, the game is too long and you need to know that today, not on the
- *  20th.
- * ------------------------------------------------------------------------
- *
- * Structure notes:
- *  - The player picks BOY or GIRL. They control that one; the other is the
- *    companion, who speaks and gives hints. Every companion line is written to
- *    work in EITHER mouth — no line assumes a gender.
- *  - `hints` is the escalation ladder, in order. The last entry always
- *    corresponds to the companion solving it. There is never a "skip" button;
- *    the failsafe is narrative.
- */
 
-/** Set these. Used wherever a name is spoken. */
-export const NAMES = { boy: 'BOY', girl: 'GIRL' };
+/**
+ * The DEFAULT names. Whoever sends a link can override them in the maker, and
+ * the names ride along in the URL — so a link can arrive already knowing what to
+ * call the two of them.
+ *
+ * Lowercase on purpose: CSS uppercases the speaker tag, and "ask girl" reads
+ * better than "ask GIRL".
+ */
+export const NAMES = { boy: 'boy', girl: 'girl' };
 
 /** Fallback ending, shown when the URL carries no custom message. */
 export const DEFAULT_MESSAGE =
@@ -36,12 +19,12 @@ export const DIALOGUE = {
   // --- waking ------------------------------------------------------------
   intro: [
     { who: 'player', text: '...' },
-    { who: 'companion', text: 'You\'re awake.' },
+    { who: 'companion', text: 'Oh! You\'re awake.' },
     { who: 'player', text: 'Where is this?' },
     { who: 'companion', text: 'I don\'t know. I woke up here too.' },
     { who: 'companion', text: 'I don\'t remember anything before it.' },
     { who: 'player', text: 'Neither do I.' },
-    { who: 'companion', text: 'Then we don\'t know each other.' },
+    { who: 'companion', text: 'Then we don\'t know each other?' },
     { who: 'player', text: 'No.' },
     { who: 'companion', text: '...but I\'d rather not do this alone.' },
     { who: 'companion', text: 'Walk with me?' },
@@ -49,24 +32,38 @@ export const DIALOGUE = {
   ],
 
   // Fired once, when the red bench first enters view — long before you reach it.
+  /**
+   * NOTE: by the time this fires, the house is solved and colorLevel is 0.66 —
+   * the world is MOSTLY back. So "the only thing here that isn't grey" is simply
+   * false, and the player can SEE that it's false.
+   *
+   * The bench is still the most vivid thing on screen (it is the one object
+   * exempt from the grade), so the beat is RECOGNITION, not contrast. It isn't
+   * the last colour left. It's the first thing either of them knows.
+   */
   benchSighted: [
     { who: 'companion', text: 'Wait. Do you see that?' },
-    { who: 'player', text: 'It\'s red.' },
-    { who: 'companion', text: 'Everything here is grey. Everything.' },
-    { who: 'companion', text: 'That\'s the only thing in this whole world that isn\'t.' },
+    { who: 'player', text: 'A bench.' },
+    { who: 'companion', text: 'Something about it ebing red. Feels so familiar.' },
+    { who: 'player', text: '...I know it.' },
+    { who: 'companion', text: 'So do I.' },
   ],
 
   // --- act 1: the lion idol ----------------------------------------------
   lion: {
     approach: [
       { who: 'companion', text: 'It\'s a lion. Stone. Someone carved it.' },
-      { who: 'player', text: 'Then someone was here before us.' },
+      { who: 'player', text: 'Then someone was here before us. Weird lion though.' },
       { who: 'lion', text: 'STOP.' },
       { who: 'lion', text: 'You may not pass what you cannot answer.' },
     ],
 
     riddle: {
-      prompt: 'I am the weight you carry when you carry nothing.\nYou set me down, and the whole world went grey.\n\nWhat did you lose?',
+      prompt:
+        'The more I fade, the harder you try to hold me.\n' +
+        'I can be shared without leaving you,\n' +
+        'And lost without ever being stolen.\n\n' +
+        'What am I?',
 
       // A single, common, thematically loaded noun. Never a phrase.
       answers: ['memory', 'memories', 'my memory', 'our memories'],
@@ -82,15 +79,22 @@ export const DIALOGUE = {
 
       wrong: [
         { who: 'lion', text: 'No.' },
-        { who: 'lion', text: 'That is not what you set down.' },
+        { who: 'lion', text: 'That is not what you lost without ever being stolen.' },
+        { who: 'lion', text: 'No I\'d think more before I answer' },
         { who: 'lion', text: 'Try again. I have waited longer than you have lived.' },
       ],
 
+      // NOTE: colorLevel goes to 0.33 here. The sky is still 33% saturated — i.e.
+      // still grey. What HAS changed is growth wave 0: the first leaves on every
+      // tree, the first shoots in the dirt. Point at that. Pointing at the sky
+      // asks the player to see something that is not there.
       solved: [
         { who: 'lion', text: 'Yes.' },
         { who: 'lion', text: 'You may pass. But you carry it again now. It is heavy.' },
         { who: 'player', text: '...something changed.' },
-        { who: 'companion', text: 'The sky. Look at the sky.' },
+        { who: 'companion', text: 'The trees.' },
+        { who: 'companion', text: 'There are leaves on the trees. There weren\'t before.' },
+        { who: 'player', text: 'Something is growing.' },
       ],
     },
   },
@@ -127,12 +131,25 @@ export const DIALOGUE = {
     ],
 
     puzzle: {
+      /**
+       * The CLOCK only reaches level 3. Level 4 — where she takes over and does
+       * it — happens ONLY if the player asks for it (`autoSolveOnTimer: false`).
+       *
+       * A sliding puzzle is not know-it-or-you-don't; she is actively making
+       * progress on it. Solving it for her on a timer, mid-move, is not a rescue —
+       * it takes the thing out of her hands. So the clock escalates as far as
+       * "I'll keep telling you which piece", which means she can NEVER be stuck
+       * (just follow the highlight) while the moves stay hers.
+       *
+       * That is why level 3 must not promise to take over, and level 4 must.
+       */
       hints: [
         { who: 'companion', text: 'It wants to be put back. I think we have to fix it.' },
-        { who: 'companion', text: 'Slide the pieces. There\'s a gap — use it.' },
+        { who: 'companion', text: 'Slide the pieces. There\'s a gap, let\'s try to use it.' },
         { who: 'companion', text: 'That one. Move that one first. Trust me.' },
-        { who: 'companion', text: 'Here — let me. I think I\'ve done this before.' },
-        { who: 'companion', text: 'There. Together. We did it together.' },
+        { who: 'companion', text: 'Keep going! I\'ll tell you which one, every time. I can see it now.' },
+        // Ask-only. She takes it out of your hands, because you asked her to.
+        { who: 'companion', text: 'Here, let me try. I think I\'ve done this before.' },
       ],
 
       solved: [
@@ -140,7 +157,7 @@ export const DIALOGUE = {
         { who: 'companion', text: 'That\'s us. That\'s you and me.' },
         { who: 'companion', text: 'We knew each other. Before.' },
         { who: 'player', text: 'We knew each other.' },
-        { who: 'companion', text: 'I\'m starting to remember. Not it — you. I\'m remembering you.' },
+        { who: 'companion', text: 'I\'m starting to remember. Not it but you. I\'m remembering you.' },
       ],
     },
   },
@@ -150,7 +167,7 @@ export const DIALOGUE = {
     approach: [
       { who: 'companion', text: 'The red thing. We found it.' },
       { who: 'player', text: 'It\'s a bench.' },
-      { who: 'companion', text: 'Sit with me.' },
+      { who: 'companion', text: 'Sit with me.... Oh never mind we\'re cartoons after all' },
       { who: 'player', text: '...there\'s something carved into it.' },
       { who: 'companion', text: 'Dots. Lines. Someone scratched them in, over and over.' },
       { who: 'companion', text: 'Whoever it was, they wanted it to survive.' },
@@ -163,9 +180,9 @@ export const DIALOGUE = {
       // Hint level 1 SHOWS the chart. This is not optional.
       hints: [
         { who: 'companion', text: 'These marks aren\'t random. They\'re a pattern. They repeat.' },
-        { who: 'companion', text: 'Wait — I remember this. I remember the shape of it.', shows: 'morse-chart' },
+        { who: 'companion', text: 'Wait! I remember this. I remember the shape of it.', shows: 'morse-chart' },
         { who: 'companion', text: 'Two dots. That\'s one letter, all by itself. Start there.' },
-        { who: 'companion', text: 'The middle word — that\'s L, O, V, E. I\'d know it anywhere.' },
+        { who: 'companion', text: 'The middle word... that\'s L, O, V, E. I\'d know it anywhere.' },
         { who: 'companion', text: 'I love you.\nThat\'s what it says. That\'s what it\'s always said.' },
       ],
 
@@ -175,8 +192,8 @@ export const DIALOGUE = {
         { who: 'companion', text: 'This was ours. This bench was ours.' },
         // colorLevel -> 1.0 here. Flowers. Grass. The trees come back.
         { who: 'player', text: 'Everything\'s coming back.' },
-        { who: 'companion', text: 'Not everything. Just the part that mattered.' },
-        { who: 'companion', text: 'I love you. I remember. I love you.' },
+        { who: 'companion', text: 'Even if not everything. Just the part that mattered.' },
+        { who: 'companion', text: 'I love you. You were the one that mattered. I love you.' },
         { who: 'player', text: 'I love you too.' },
       ],
     },

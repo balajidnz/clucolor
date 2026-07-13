@@ -107,6 +107,41 @@ body { display: grid; place-items: center; }
   50%      { transform: translateY(2px); opacity: 1; }
 }
 
+/* Retro skip. Hard edges, no border-radius, chunky offset shadow — it should look
+   stamped on rather than designed. Skips only the CURRENT run of lines. */
+.dialogue-skip {
+  position: absolute;
+  top: 5%;
+  right: 5%;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: clamp(9px, 1.05vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #cfd6e4;
+  background: #12141a;
+  border: 2px solid #6f7891;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #05060a;
+  cursor: pointer;
+  image-rendering: pixelated;
+  transition: none; /* retro: things snap, they don't ease */
+}
+
+.dialogue-skip:hover,
+.dialogue-skip:focus-visible {
+  color: #fff;
+  border-color: #c8433f;
+  background: #1c1216;
+  outline: none;
+}
+
+/* Pressing it should feel like a physical key going down. */
+.dialogue-skip:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 #05060a;
+}
+
 /* --- panels --------------------------------------------------------------- */
 
 .panel {
@@ -185,16 +220,267 @@ body { display: grid; place-items: center; }
   animation: rise 1200ms cubic-bezier(.22,.61,.36,1) 900ms both;
 }
 
-/* Held back deliberately — putting a call-to-action under someone's love letter
-   the instant it lands would cheapen it. */
+/* Held back a beat — putting a call-to-action under someone's love letter the
+   INSTANT it lands would cheapen it. But only a beat: 3.2s felt right in theory
+   and far too long in practice. It only has to arrive after the message has, not
+   make you wait for it. */
 .ending-offer {
   margin-top: 26px;
-  animation: rise 900ms ease 3200ms both;
+  animation: rise 700ms ease 1500ms both;
+}
+
+/* "again" sits beside "send this to someone" but must not compete with it. */
+.panel-btn.is-quiet {
+  color: #7f8aa3;
+  background: none;
+  border-color: #2c3240;
+}
+
+.panel-btn.is-quiet:hover {
+  color: var(--ink);
+  border-color: #5a637a;
+}
+
+/* --- maker: the optional half, hidden until asked for --------------------- */
+
+.maker-more {
+  margin: 2px 0 0;
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 12px;
+  color: #7f8aa3;
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed #3a4152;
+  cursor: pointer;
+}
+
+.maker-more:hover { color: var(--ink); border-bottom-color: #c8433f; }
+
+.maker-extras {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  animation: rise 400ms ease both;
 }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
+}
+
+/* --- riddle --------------------------------------------------------------- */
+
+.panel-riddle { gap: 12px; }
+
+.riddle-who {
+  margin: 0;
+  font-size: clamp(9px, 1.1vw, 13px);
+  letter-spacing: 0.18em;
+  color: #a2704a;
+}
+
+.riddle-prompt {
+  margin: 0;
+  max-width: 34ch;
+  font-size: clamp(13px, 1.8vw, 21px);
+  line-height: 1.75;
+  white-space: pre-wrap; /* the riddle's line breaks are the poem */
+}
+
+.riddle-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.riddle-input {
+  width: min(20ch, 60vw);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: clamp(12px, 1.4vw, 16px);
+  text-align: center;
+  color: var(--ink);
+  background: #12141a;
+  border: 2px solid #3a4152;
+  border-radius: 3px;
+}
+
+.riddle-input:focus { border-color: #c8433f; outline: none; }
+.riddle-input:disabled { opacity: 0.5; }
+
+/* The lion's contempt, not a validation error. Never red, never an X. */
+.riddle-reply {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: clamp(11px, 1.3vw, 15px);
+  color: #a2704a;
+  font-style: italic;
+}
+
+.riddle-companion {
+  margin: 6px 0 0;
+  max-width: 32ch;
+  font-size: clamp(11px, 1.3vw, 15px);
+  line-height: 1.6;
+  color: #8fa6c4;
+  white-space: pre-wrap;
+}
+
+.riddle-ask {
+  margin-top: 4px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: clamp(10px, 1.1vw, 13px);
+  color: #7f8aa3;
+  background: none;
+  border: 1px solid #3a4152;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.riddle-ask:hover:not(:disabled) { color: var(--ink); border-color: #5a637a; }
+.riddle-ask:disabled { opacity: 0.35; cursor: default; }
+
+/* Replays on every new line, so a hint you are already looking at still reads
+   as NEW rather than silently changing under you. */
+.is-new { animation: rise 420ms ease both; }
+
+.panel-riddle.is-solved { animation: solved 700ms ease both; }
+
+@keyframes solved {
+  0%   { background: #0b0d12f2; }
+  40%  { background: #16241cf2; }
+  100% { background: #0b0d1200; }
+}
+
+/* --- morse ---------------------------------------------------------------- */
+
+.panel-morse { gap: 12px; }
+
+/* Scratched into wood, not printed. */
+.morse-carving {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 14px;
+  max-width: 32ch;
+  padding: 18px 22px;
+  background: #3a2a22;
+  border: 2px solid #241a15;
+  border-radius: 2px;
+  box-shadow: inset 0 2px 8px #0006;
+}
+
+.morse-word { display: flex; gap: 10px; }
+
+.morse-mark {
+  font-size: clamp(15px, 2vw, 24px);
+  letter-spacing: 0.12em;
+  color: #6b5546;              /* worn into the grain — barely legible */
+  text-shadow: 0 1px 0 #241a15;
+  transition: color 180ms ease, text-shadow 180ms ease;
+}
+
+/* She types a letter, and two scratches on a bench light up. This is the moment. */
+.morse-mark.is-lit {
+  color: #f0d9a8;
+  text-shadow: 0 0 10px #e2a04e99;
+}
+
+.morse-gap {
+  color: #4d3a30;
+  font-size: clamp(13px, 1.6vw, 19px);
+}
+
+.morse-input { width: min(26ch, 70vw); }
+.morse-input.is-wrong { border-color: #7a3a36; }
+
+/* The chart she remembers. Without it, this puzzle is a wall. */
+.morse-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 2px 10px;
+  width: min(46ch, 84vw);
+  max-height: 34vh;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: #17191f;
+  border: 1px solid #3a4152;
+  border-radius: 3px;
+  animation: rise 500ms ease both;
+}
+
+.morse-chart-row {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.morse-chart-row b { color: #cfd6e4; font-weight: 700; }
+.morse-chart-row i { color: #7f8aa3; font-style: normal; letter-spacing: 0.08em; }
+
+.panel-morse.is-solved .morse-carving {
+  animation: carved 1600ms ease both;
+}
+
+@keyframes carved {
+  0%   { box-shadow: inset 0 2px 8px #0006; }
+  40%  { box-shadow: inset 0 2px 8px #0006, 0 0 40px 8px #e2a04e55; }
+  100% { box-shadow: inset 0 2px 8px #0006; }
+}
+
+/* --- sliding photo -------------------------------------------------------- */
+
+.panel-slider { gap: 14px; }
+
+.slider-board {
+  position: relative;
+  border: 3px solid #c9a227;   /* the gilt frame, same as in the room */
+  box-shadow: 0 0 0 2px #7a5f14, 0 10px 30px #0008;
+  background: #241d1a;         /* the hole, seen through the missing piece */
+}
+
+.slider-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;  /* an integer upscale; keep the pixels square */
+  cursor: pointer;
+  /* Only the position animates. Sliding IS a change of transform. */
+  transition: transform 130ms ease-out;
+}
+
+/* The missing piece. It exists — it is the two of them — but it is not shown
+   until the picture is whole. */
+.slider-piece.is-blank {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* She points at the exact piece to move. The search makes that answer optimal. */
+.slider-piece.is-hinted {
+  box-shadow: inset 0 0 0 3px #f2ece4, inset 0 0 0 6px #c8433f;
+  z-index: 2;
+}
+
+.panel-slider.is-solved .slider-board {
+  animation: whole 1600ms ease both;
+}
+
+/* The picture comes back together. */
+@keyframes whole {
+  0%   { box-shadow: 0 0 0 2px #7a5f14, 0 10px 30px #0008; }
+  35%  { box-shadow: 0 0 0 2px #c9a227, 0 0 40px 10px #c9a22766; }
+  100% { box-shadow: 0 0 0 2px #7a5f14, 0 10px 30px #0008; }
 }
 
 /* --- maker ---------------------------------------------------------------- */
@@ -232,6 +518,30 @@ body { display: grid; place-items: center; }
   color: #6f7891;
 }
 
+/* Two name fields side by side. The placeholders ARE the defaults, so an empty
+   field is a choice, not an omission. */
+.maker-names {
+  display: flex;
+  gap: 10px;
+  width: min(46ch, 82vw);
+}
+
+.maker-name {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: clamp(12px, 1.4vw, 16px);
+  text-align: center;
+  color: var(--ink);
+  background: #12141a;
+  border: 2px solid #3a4152;
+  border-radius: 3px;
+}
+
+.maker-name:focus { border-color: #c8433f; outline: none; }
+.maker-name::placeholder { color: #5a637a; }
+
 .maker-count.is-full { color: #c8433f; }
 
 .maker-result {
@@ -262,6 +572,93 @@ body { display: grid; place-items: center; }
   border-color: #3a4152;
   transform: none;
 }
+
+/* --- loading -------------------------------------------------------------- */
+
+.panel-loading { gap: 20px; background: #0b0d12; }
+
+/* The one red thing, before there is any colour at all. */
+.loading-dot {
+  width: 10px;
+  height: 10px;
+  background: #c8433f;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: .2; }
+  50%      { opacity: 1; }
+}
+
+.panel-loading.is-done {
+  opacity: 0;
+  transition: opacity 400ms ease;
+  pointer-events: none;
+}
+
+/* --- logo ----------------------------------------------------------------- */
+
+.panel-logo { gap: 16px; cursor: pointer; }
+
+/* Native 584x130. NEVER upscaled — the background remover anti-aliased the edges,
+   so `pixelated` would show ragged alpha instead of clean blocks. Capped below
+   native so the browser only ever scales it DOWN, which is smooth and clean. */
+.logo {
+  width: min(560px, 74vw);
+  height: auto;
+  animation: rise 1100ms cubic-bezier(.22,.61,.36,1) both;
+}
+
+.press-start {
+  margin-top: 22px;
+  padding: 0;
+  font: inherit;
+  font-size: clamp(10px, 1.2vw, 13px);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #8f98ad;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  animation: blink 1.7s steps(1) infinite 1200ms;
+}
+
+@keyframes blink {
+  0%, 60%  { opacity: 1; }
+  61%, 99% { opacity: 0.25; }
+}
+
+/* --- mute ----------------------------------------------------------------- */
+
+/* Always on screen, always the same place. Someone who just opened a link should
+   never feel trapped with sound they did not ask for. */
+.mute {
+  position: absolute;
+  left: 5%;
+  top: 5%;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: #cfd6e4;
+  background: #12141ac0;
+  border: 2px solid #6f7891;
+  border-radius: 0;              /* retro: hard edges, like the skip */
+  box-shadow: 2px 2px 0 #05060a;
+  cursor: pointer;
+  transition: none;
+}
+
+.mute:hover { border-color: #c8433f; color: #fff; }
+
+.mute:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #05060a;
+}
+
+.mute.is-muted { color: #6f7891; border-color: #3a4152; }
 
 /* --- cutscene fade -------------------------------------------------------- */
 
