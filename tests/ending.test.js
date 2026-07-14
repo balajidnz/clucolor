@@ -114,11 +114,16 @@ for (const payload of PAYLOADS) {
   document.body.append(root);
   showMaker(root);
 
-  const box = root.querySelector('.maker-text');
-  const from = root.querySelector('.maker-from');
-  const make = root.querySelector('.panel-btn');
+  // The maker no longer has form fields — you type straight into the ending card.
+  // `.maker-input` IS the `.ending-message`; `.maker-sign` IS the `.ending-from`.
+  const box = root.querySelector('.maker-input');
+  const from = root.querySelector('.maker-sign');
+  const make = root.querySelector('.panel-btn');   // "copy my link" — the only primary action
   const link = root.querySelector('.maker-link');
   const counter = root.querySelector('.maker-count');
+
+  check('maker: you type into the ending itself, not a form field',
+    box.classList.contains('ending-message') && from.classList.contains('ending-from'));
 
   check('maker: button disabled while empty', make.disabled);
 

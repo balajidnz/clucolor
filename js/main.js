@@ -10,6 +10,7 @@ import { createAudio } from './engine/audio.js';
 import { gradeFilter, tintOpacity } from './game/colorGrade.js';
 import { loadCharacter, frameFor } from './game/characters.js';
 import { createDialogue } from './game/dialogue.js';
+import { createNudge } from './game/nudge.js';
 import { createStory, LION_X, HOUSE_X } from './game/story.js';
 import { showLoading, showLogo, showPicker, showPlaceholderPuzzle, showEnding, mountMuteButton } from './game/screens.js';
 import { showRiddle } from './game/puzzles/riddle.js';
@@ -106,6 +107,7 @@ const names = {
 };
 
 const dialogue = createDialogue(ui, names);
+const nudge = createNudge(ui);
 const fade = createFade($('fade'));
 const color = createTween(0);
 
@@ -224,6 +226,10 @@ function update(dt) {
   // on the idle pose rather than freezing mid-stride.
   if (p.moving) p.t += dt;
   if (cm.moving) cm.t += dt;
+
+  // `frozen` already knows exactly when walking is possible, and `p.moving`
+  // whether they are doing it. The nudge needs nothing else.
+  nudge.update(dt, !frozen, p.moving);
 
   input.endFrame();
   void story.update(p.x);

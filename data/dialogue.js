@@ -60,9 +60,9 @@ export const DIALOGUE = {
 
     riddle: {
       prompt:
-        'The more I fade, the harder you try to hold me.\n' +
-        'I can be shared without leaving you,\n' +
-        'And lost without ever being stolen.\n\n' +
+        'I am invisible, priceless, and uniquely yours.\n' +
+        'I cannot be bought, but I can be cherished.\n' +
+        'I shape who you are, yet I belong to the past.\n\n' +
         'What am I?',
 
       // A single, common, thematically loaded noun. Never a phrase.
@@ -79,7 +79,7 @@ export const DIALOGUE = {
 
       wrong: [
         { who: 'lion', text: 'No.' },
-        { who: 'lion', text: 'That is not what you lost without ever being stolen.' },
+        { who: 'lion', text: 'Well do you really chrish that? And does that shape you?' },
         { who: 'lion', text: 'No I\'d think more before I answer' },
         { who: 'lion', text: 'Try again. I have waited longer than you have lived.' },
       ],

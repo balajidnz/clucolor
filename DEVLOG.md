@@ -8,20 +8,27 @@ This file is the diff against it — what actually happened.
 
 ## Where we are
 
-**⭐ NO PLACEHOLDERS LEFT.** All three puzzles are real. The game is complete end to end.
+**⭐ SHIPPED AND LIVE.** All three puzzles are real, the music plays, and the game is
+deployed on the real domain. Nothing is a placeholder.
 
 | | |
 |---|---|
-| Live | `https://sunair.fun` — coming-soon page. The game is on `dev`; merge on the 21st. |
-| Playable | title → intro → lion (**riddle**) → house interior (**sliding photo**) → bench (**morse**) → ending → maker → shareable link |
+| **The game** | **`https://sunair.fun/clucolor/`** — live, HTTPS, **unlisted** |
+| **The portal** | `https://sunair.fun` — live. Shows "Soon." CluColor is commented out until the 21st. |
+| Playable | logo → picker → intro → lion (**riddle**) → house (**sliding photo**) → bench (**morse**) → ending → maker → shareable link |
 | Tests | encode 28 · ending 27 · riddle 41 · dialogue 14 · slider 25 · morse 30 = **165** |
 | Music | ✅ four layers, phase-locked, 1.2MB. Grows as the world does. |
-| Left | day 9 **playtest** · day 10 freeze · **Balaji: rewrite the dialogue** |
+| Dialogue | ✅ Balaji rewrote it. The words are his. |
+| Left | **playtest feedback** · day 10 freeze + `og:image` |
+
+**Publishing on the 21st is deleting two `<!--` markers** in the portal's `index.html`.
+The "Soon." line removes itself (`.games:has(.game) ~ .soon`), so there is no second edit
+to forget and no way to ship a live game with "Soon." still sitting under it.
 
 **Waiting on Balaji:**
-- [ ] **Rewrite `data/dialogue.js`.** The structure is right; the words are still mine.
-      This is the LAST thing outstanding.
+- [x] ~~Rewrite `data/dialogue.js`~~ — done. The words are his.
 - [x] ~~The music~~ — done (day 8).
+- [ ] **Playtest feedback** — three people tested it. Tuning pending.
 
 ## Audio — the ORIGINAL SPEC (kept for the record). ⚠ SUPERSEDED BY DAY 8.
 
@@ -88,6 +95,159 @@ everything else.
 be in sync.
 
 ---
+
+## Day 9 — 2026-07-14 — polish, and the deploy
+
+The day the thing became a URL you can send to someone.
+
+### Shipped
+
+| | |
+|---|---|
+| Repo hygiene | deleted `tools/watermark.html`, `measure.html`, `audio.html` — one-off instruments whose findings are now baked into the code. Kept the ones that *regenerate* assets. |
+| `README.md` | Kenney credited (CC0). Music credited to Balaji **as his own composition, not AI-generated**. The redistribution rule written down. |
+| UI | maker collapsed to one box · **loading screen** · logo → press-to-start → picker · "again" at the ending |
+| Art | `assets/img/logo.png` (Balaji's, keyed) · `favicon.png` built from the bench sprite |
+| **Deploy** | **two repos, real domain, HTTPS enforced** |
+| Portal | flat-poster design: sand, a hard sun, a two-tone wave |
+
+### ⚠ The loading screen was not polish. It was a bug.
+
+The page was **blank black** while ~1.5MB of images and audio loaded. Not "briefly" —
+long enough that a stranger opening the link would conclude it was broken and close the tab.
+
+The cause was boot order: nothing was mounted until after `await Promise.all([...])` had
+resolved. The fix is one line moved — `showLoading()` now mounts **before** a single asset
+is fetched, and `loading.done()` fires after.
+
+**This is the single most valuable thing found this week**, and it was found by opening the
+game on a cold cache instead of a warm one. Every test we had passed. It would have shipped.
+
+### The favicon is the bench
+
+Not a logo, not a letter — the **red bench**, composited on a grey field. It's the one object
+exempt from the desaturation grade, so the tab icon is literally the thesis of the game in
+16 pixels: one spot of colour in a dead world.
+
+### ⚠ Three bugs in `tools/keyout.js`, all from assuming instead of measuring
+
+The keyer worked on the bench and then silently failed on the logo — Balaji: *"i dont think
+it was keyed out."* Three separate causes, and the shape of all three is the same:
+
+| bug | what I'd assumed | what was true |
+|---|---|---|
+| checker shades **hardcoded** (205 / 254, floor `r > 180`) | the generator uses one checkerboard | the logo's were **125 / 193** — the dark square was *below the floor*, so nothing matched and nothing was erased |
+| **two separate tolerance windows** | AA pixels land inside one of them | the renderer anti-aliases the two squares *into each other*, so edge pixels land in the **gap between** the windows, are classified as neither, and survive as a pale halo |
+| `GREY_TOL = 14` | the checkerboard is neutral | the generator's output has a **warm cast** — AA pixels come out `rgb(160,160,144)`, differ by 16–32, and fail the neutrality test |
+
+Fixes: **learn** the two shades from the border ring (which is checkerboard *by definition*),
+make the tolerance band **continuous** from the floor upward, and loosen `GREY_TOL` to **30**
+— safe, because the subjects are blue/orange/red with channels 150+ apart. Nothing genuinely
+coloured comes close.
+
+There is also **no upper bound** any more: the generator stamps a near-white sparkle
+watermark (~240) that sits above any ceiling derived from the checker shades, so a ceiling
+leaves it behind as a ghost in the corner.
+
+### ⚠ The logo is NOT pixel art
+
+Balaji's background-removed version has **anti-aliased edges** — run lengths of 2,3,4,5…
+instead of clean multiples. The pixel grid is gone.
+
+So it must **only ever be scaled DOWN**. It's capped below its native 584×130
+(`width: min(560px, 74vw)`) with **no `image-rendering: pixelated`** — that property on
+anti-aliased artwork shows ragged alpha, not clean blocks. Upscaling it would look broken.
+
+### The deploy: two repos
+
+Balaji wants `sunair.fun` to be a neal.fun-style portal, so the game moved to a subpath.
+
+| repo | serves | holds CNAME |
+|---|---|---|
+| `balajidnz.github.io` | `sunair.fun` | **yes — only this one may** |
+| `clucolor` (was `SunAir`) | `sunair.fun/clucolor/` | no |
+
+This works because a GitHub **user site** with a custom domain lends that domain to every
+project repo on the account, at a path matching the repo name. **The repo name IS the URL
+and URLs are case-sensitive** — hence lowercase `clucolor`, not `CluColor`.
+
+Verified before deploying: **no absolute paths anywhere**, so every asset resolves at the
+subpath, and `buildLink()` uses `location.origin + location.pathname` — so shared links
+correctly carry `/clucolor/`.
+
+### ⚠ Three things broke during the deploy. None were in the game.
+
+**1. `~/Desktop` is a git repository.** It has a `.git`, no remote, and had zero commits.
+`sunair-portal` had no `.git` of its own — so my check "is the portal a repo?" walked **up**
+and answered *yes, about the Desktop*. The deploy script's `git add -A` then staged the
+entire Desktop and committed it, including a gitlink to `Project X`.
+
+Nothing was pushed (no remote). Undone with `update-ref -d HEAD`. **The lesson is in the
+fix**: the script now *asserts* `git rev-parse --show-toplevel` equals the directory it
+means to be in, and refuses to run otherwise. `git add -A` in a non-repo folder is not an
+error — it silently targets the parent.
+
+**2. GitHub commits to your repo behind your back.** Releasing the custom domain via the
+API made **GitHub itself push a `Delete CNAME` commit to `origin/main`**. Local `main` had
+deleted the same file. Two histories, same change, diverged → push rejected. VS Code renders
+this as the unhelpful *"can't sync"* — which is the exact same misleading message this whole
+project opened with on day 1, and again the message was pointing at the wrong thing.
+
+**3. Pages is auto-enabled on a `*.github.io` repo.** `POST /pages` returned **409** the
+instant the repo existed, and `set -e` killed the script mid-deploy.
+
+**The real lesson: a deploy script must be idempotent, not a one-shot.** Rewritten so every
+step checks whether it's already done and skips. Re-running it is now always safe — which is
+what you want at 2am on the 21st, not a script that only works if nothing has ever gone wrong.
+
+### The domain move has a TLS tail — which is why it was done on day 9, not day 21
+
+Moving a custom domain between repos makes GitHub **re-verify DNS and re-issue the
+certificate**. Until that lands, the site is HTTP-only — and `AudioContext`,
+`clipboard.writeText` and `navigator.share` **all refuse to run without a secure context**.
+On plain HTTP the music is silent and the share button is dead, and the game looks broken
+rather than insecure.
+
+It resolved in minutes. It is documented to take **up to 24 hours**. Doing this on the
+morning of the 21st would have been a genuine way to lose the gift.
+
+### Unlisted, and actually verified
+
+The game is live but not linked. Two independent mechanisms:
+
+- the game's `index.html` carries `noindex, nofollow` → search engines won't index it
+- the portal doesn't link it → **crawlers have no path to it at all**
+
+Checked by *parsing* the deployed portal's HTML rather than grepping it — `grep` matched the
+commented-out block and reported a false alarm. An actual HTML parser confirms the live page
+exposes **zero `<a>` elements**. A comment is not a link.
+
+### The portal design
+
+Balaji: *"more fun and minimalist, a sunny beach morning."* Three variants built and served
+side by side; he picked the **poster**.
+
+Flat sand, one hard yellow circle, chunky rounded type, hard-offset shadows. On hover a card
+**presses into** its shadow — it travels exactly as far as the shadow shrinks, so it reads as
+a physical button rather than a rectangle sliding around.
+
+- **The blue is the ink, not a thing.** `--ink: #1b3a4b` — a deep sea-blue instead of black,
+  so every border and letter carries a blue undertone without anything being *the blue bit*.
+- **The wave is an inline SVG data-URI.** A wave built from `border-radius` always ends up
+  looking like what it is: a stack of ellipses. `preserveAspectRatio: none` +
+  `background-size: 100% 100%` stretches one 1440-wide path edge-to-edge at any viewport
+  width — no tiling, no seam, no gap on an ultrawide.
+- **No web fonts.** The portal's CSP is `default-src 'self'`, which blocks Google Fonts
+  outright. `ui-rounded` resolves to SF Rounded on Apple and degrades to a friendly system
+  sans elsewhere. Zero network requests.
+
+Footer: `made by Rico 🧸`.
+
+### Next
+
+**The playtest is the only thing left that can still change the game.** Three people have
+played it. What matters is not their suggestions but *where they stalled* — the hint clock
+auto-solves at 120s, and the plan has flagged that as too generous since day 1.
 
 ## Day 8 — 2026-07-14
 
@@ -898,6 +1058,9 @@ Note: a **CSS filter on an element never appears in `canvas.toDataURL()`** — h
 - **Branching:** `main` = coming-soon page (published by Pages). `dev` = the game.
   Merge on the 21st. The repo is public and the Pages URL is guessable, so this is what
   stops her finding it early.
+  > **⚠ SUPERSEDED ON DAY 9.** `main` is now the game and it deploys on every push. What
+  > keeps it hidden is no longer a branch — it's that the portal doesn't link it and the
+  > game carries `noindex`. Publishing on the 21st is a portal edit, not a merge.
 
 ### Open / needs Balaji
 

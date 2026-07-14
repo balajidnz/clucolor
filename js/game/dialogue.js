@@ -38,9 +38,23 @@ export function createDialogue(root, names) {
   const text = document.createElement('p');
   text.className = 'dialogue-text';
 
+  /**
+   * The "there is more" caret.
+   *
+   * A bare ▾ is the genre convention and it taught NOBODY — playtesters sat in front
+   * of the first line not knowing how to continue. So the first time, it says the
+   * words out loud; once they have advanced even once, they know, and it collapses
+   * to the ▾ forever.
+   */
   const more = document.createElement('span');
   more.className = 'dialogue-more';
-  more.textContent = '▾';
+
+  let taught = false;
+  const showCaret = () => {
+    more.textContent = taught ? '▾' : 'click or press any key  ▾';
+    more.classList.toggle('teaching', !taught);
+  };
+  showCaret();
 
   box.append(who, text, more);
 
@@ -77,16 +91,66 @@ export function createDialogue(root, names) {
     return speaker;
   };
 
-  /** @param {KeyboardEvent} e */
+  /**
+   * A modifier alone must not advance — someone reaching for Shift or holding Cmd
+   * to switch tabs has not asked for the next line.
+   */
+  const MODIFIERS = new Set([
+    'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight',
+    'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight',
+    'CapsLock', 'Tab', 'ContextMenu',
+  ]);
+
+  /**
+   * ANY key advances. It used to be Space/Enter/E only — and the intro line reads
+   * "Hold → to walk", so every single playtester pressed the right arrow while the
+   * box was still open, and NOTHING HAPPENED. The instruction named a key the game
+   * was ignoring at the exact moment it named it.
+   *
+   * Any-key also means the arrow they pressed advances the dialogue AND is already
+   * held down when the box closes — so they start walking the instant they can,
+   * which is what they were trying to do all along.
+   *
+   * @param {KeyboardEvent} e
+   */
   const onKey = (e) => {
     if (!open) return;
-    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') {
-      e.preventDefault();
-      advance?.();
-    } else if (e.code === 'Escape') {
+
+    /**
+     * ⚠ THE ONE THAT NEARLY SHIPPED.
+     *
+     * Holding a key does not fire ONE keydown — the browser auto-repeats it about
+     * thirty times a second. So walking to the lion with → held down meant the
+     * dialogue opened and then ate ~30 lines per second: the entire scene gone
+     * before the player's thumb left the key. The story silently deleted itself.
+     *
+     * `e.repeat` is true for every event after the first. A held key must not
+     * advance ANYTHING — you are holding it to walk, not to read.
+     */
+    if (e.repeat) return;
+
+    if (e.metaKey || e.ctrlKey || e.altKey) return;   // browser shortcuts stay the browser's
+    if (MODIFIERS.has(e.code)) return;
+
+    // Defensive: a puzzle's text field should never be typing into the dialogue.
+    const t = /** @type {HTMLElement | null} */ (e.target);
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+
+    // Escape is deliberate and explicit — it is never an accident, so it is not
+    // subject to the open-guard below. Checked FIRST for exactly that reason.
+    if (e.code === 'Escape') {
       e.preventDefault();
       doSkip();
+      return;
     }
+
+    // A key pressed in the same breath as the box opening is not a page turn.
+    // Same reasoning as the click guard, same window.
+    if (performance.now() - openedAt < CLICK_GUARD_MS) return;
+
+    e.preventDefault();
+    taught = true;
+    advance?.();
   };
 
   /** @param {MouseEvent} e */
@@ -94,6 +158,7 @@ export function createDialogue(root, names) {
     if (!open) return;
     if (performance.now() - openedAt < CLICK_GUARD_MS) return;
     if (skip.contains(/** @type {Node} */ (e.target))) return; // its own handler
+    taught = true;
     advance?.();
   };
 
@@ -154,6 +219,7 @@ export function createDialogue(root, names) {
             finished = true;
             cancelAnimationFrame(raf);
             safeRender(text, line.text);
+            showCaret();
             more.hidden = false;
             advance = settle;
           };

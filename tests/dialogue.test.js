@@ -146,6 +146,71 @@ const LINES = [
   h.done();
 }
 
+// --- ANY key advances ----------------------------------------------------------
+//
+// This is the playtest bug, pinned. The intro line reads "Hold → to walk", and
+// advancing used to be Space/Enter/E ONLY — so every tester pressed the arrow the
+// line had just named, and the game ignored it. The instruction pointed at a key
+// that did nothing at the exact moment it pointed at it.
+
+{
+  const h = harness();
+
+  /**
+   * SHORT lines on purpose. The shared LINES[0] is deliberately ~10 seconds of
+   * typewriter, so a snapshot of it mid-reveal keeps growing on its own — and
+   * "nothing changed" can never hold against a string that is still being typed.
+   * These finish revealing in well under the settle below, so the text is STILL,
+   * and any change to it can only have come from an advance.
+   */
+  const SHORT = [
+    { who: 'lion', text: 'ONE' },
+    { who: 'lion', text: 'TWO' },
+  ];
+
+  const playing = h.dlg.play(SHORT, true);
+  await sleep(320);          // line 1 fully typed, and past CLICK_GUARD_MS (220)
+
+  const key = (code, init = {}) =>
+    document.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true, ...init }));
+
+  check('the line has settled before we test it', h.text() === 'ONE', h.text());
+
+  // A modifier on its own is someone reaching for Shift, not asking for the next line.
+  key('ShiftLeft');
+  await sleep(20);
+  check('a modifier alone does NOT advance', h.dlg.open && h.text() === 'ONE', h.text());
+
+  // Cmd+R is a reload, not a page turn. Browser shortcuts stay the browser's.
+  key('KeyR', { metaKey: true });
+  await sleep(20);
+  check('Cmd/Ctrl-combos do NOT advance', h.dlg.open && h.text() === 'ONE', h.text());
+
+  /**
+   * ⚠ THE BUG THAT NEARLY SHIPPED, PINNED.
+   *
+   * Walking to the lion with → held down: the browser auto-repeats keydown ~30x a
+   * second, so the dialogue opened and ate the whole scene before the player's
+   * thumb left the key. An event with `repeat` set is a key being HELD — you are
+   * holding it to walk, not to read.
+   */
+  for (let i = 0; i < 30; i++) key('ArrowRight', { repeat: true });
+  await sleep(60);
+  check('a HELD key (auto-repeat) does NOT advance — 30 repeats change nothing',
+    h.dlg.open && h.text() === 'ONE', h.text());
+
+  // But a real press of the very same key must work — that is the whole point.
+  key('ArrowRight');
+  await sleep(160);
+  check('a real ArrowRight press advances — the key the script tells you to press',
+    h.text() === 'TWO', h.text());
+
+  key('Escape');
+  await playing;
+  check('Escape still skips, and is not swallowed by the open-guard', !h.dlg.open);
+  h.done();
+}
+
 // --- report --------------------------------------------------------------------
 
 const list = document.getElementById('results');

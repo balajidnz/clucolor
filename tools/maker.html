@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>maker — dev harness</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  /* Only what's needed to stand the real panel up outside the game. The maker
+     itself is untouched: same module, same CSS, same markup the player gets. */
+  body { margin: 0; background: #05070b; }
+  #stage {
+    position: relative;
+    width: min(96vw, 960px);
+    aspect-ratio: 16 / 9;
+    margin: 3vh auto;
+    background: #10131b;
+    border: 1px solid #2c3240;
+  }
+  #ui { position: absolute; inset: 0; }
+  .bar {
+    display: flex; gap: 10px; justify-content: center; padding: 12px;
+    font: 12px ui-monospace, Menlo, monospace; color: #8f98ad;
+  }
+  .bar button {
+    font: inherit; color: #cfd6e4; background: #12141a;
+    border: 1px solid #3a4152; padding: 6px 12px; cursor: pointer;
+  }
+  .bar button:hover { border-color: #c8433f; }
+</style>
+</head>
+<body>
+
+<div id="stage"><div id="ui"></div></div>
+
+<div class="bar">
+  <button id="maker">maker</button>
+  <button id="ending">the real ending (to compare)</button>
+  <span>— the preview must match the ending exactly</span>
+</div>
+
+<script type="module">
+import { showMaker } from '../js/game/maker.js';
+import { showEnding } from '../js/game/screens.js';
+
+const ui = document.getElementById('ui');
+const clear = () => { ui.innerHTML = ''; };
+
+document.getElementById('maker').addEventListener('click', () => {
+  clear();
+  showMaker(ui);
+});
+
+document.getElementById('ending').addEventListener('click', () => {
+  clear();
+  void showEnding(ui);
+});
+
+showMaker(ui);
+</script>
+
+</body>
+</html>

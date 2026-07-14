@@ -7,6 +7,32 @@
 
 * { box-sizing: border-box; }
 
+/**
+ * ⚠ `[hidden]` IS THE LOWEST-PRIORITY RULE IN THE BROWSER.
+ *
+ * `hidden` works via the UA stylesheet's `[hidden] { display: none }` — and ANY
+ * author rule that sets `display` on the same element outranks it and silently
+ * defeats it. `el.hidden = true` then does nothing at all: the property is set,
+ * the DOM agrees, and the element stays on screen.
+ *
+ * This had bitten FIVE things, and nobody noticed because nothing errors:
+ *
+ *   .maker-extras   (display:grid) — the "change their names / sign it" disclosure
+ *                   NEVER hid anything. The fields were always visible, so clicking
+ *                   the button appeared to do nothing. A playtester reported exactly
+ *                   this and I went looking for a JS bug.
+ *   .maker-result   (display:grid) — the empty link box, "copy" and "share" showed
+ *                   from the moment the maker opened, before any link existed.
+ *   .morse-chart    (display:flex) — ⚠ THE WORST. The morse chart is a *hint*, given
+ *                   at level 1. It was on screen from the start, so act 3's puzzle
+ *                   handed you its own answer key for free.
+ *   .panel-row      (display:flex)
+ *   .nudge          (display:flex)
+ *
+ * One rule fixes all of them, and every future one.
+ */
+[hidden] { display: none !important; }
+
 html, body {
   height: 100%;
   margin: 0;
@@ -105,6 +131,61 @@ body { display: grid; place-items: center; }
 @keyframes nudge {
   0%, 100% { transform: translateY(0); opacity: .45; }
   50%      { transform: translateY(2px); opacity: 1; }
+}
+
+/* The caret spells itself out until the player has advanced ONCE. A bare ▾ is the
+   genre convention and it taught nobody — testers sat in front of the first line
+   not knowing it wanted them. */
+.dialogue-more.teaching {
+  font-size: clamp(8px, 0.95vw, 11px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   "You can walk now."
+
+   The world is nearly always waiting for the player to walk right — that is what
+   fires every beat — and it never said so. Two testers stalled after solving a
+   puzzle, with nothing on screen to tell them the game wanted them to move.
+
+   Shown only when they CAN walk and aren't. Gone the moment they do.
+   --------------------------------------------------------------------------- */
+.nudge {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: clamp(9px, 1.05vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #cfd6e4;
+  background: #12141ae0;
+  border: 2px solid #3a4152;
+  pointer-events: none;   /* never eats the click that advances dialogue */
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+
+.nudge.is-in { opacity: 1; }
+
+.nudge-arrow {
+  color: #c8433f;                       /* the bench red — the one colour that never greys */
+  animation: nudge-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes nudge-slide {
+  0%, 100% { transform: translateX(0); opacity: .5; }
+  50%      { transform: translateX(4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialogue-more, .nudge-arrow { animation: none; opacity: 1; }
 }
 
 /* Retro skip. Hard edges, no border-radius, chunky offset shadow — it should look
@@ -243,19 +324,120 @@ body { display: grid; place-items: center; }
 
 /* --- maker: the optional half, hidden until asked for --------------------- */
 
-.maker-more {
-  margin: 2px 0 0;
-  padding: 4px 2px;
+/* --- the maker: you type INTO the ending ------------------------------------
+
+   The card is the real ending's markup (.panel-ending / .ending-message /
+   .ending-from) with a caret in it. Everything below exists to make a <textarea>
+   and an <input> stop looking like form fields — because the moment they look
+   like form fields, the illusion breaks and you are back to filling in a form
+   instead of writing to someone.
+   --------------------------------------------------------------------------- */
+
+.panel.is-maker {
+  position: static;          /* undo `.panel`'s `absolute; inset: 0` */
+  inset: auto;
+  width: min(420px, 82vw);
+  min-height: 4.6em;         /* an empty card should still look like the ending */
+  padding: 16px 18px;
+  gap: 6px;
+  border: 2px solid #2c3240;
+  background: #0b0d12;
+}
+
+/* The message RISES over 1.5s at the ending and the signature follows 900ms
+   later. Lovely once. Absurd on every keystroke. */
+.panel.is-maker .ending-message,
+.panel.is-maker .ending-from {
+  animation: none;
+}
+
+/* A textarea that is not a textarea. Same font, same size, same 26ch measure and
+   same wrapping as .ending-message — so the line breaks fall exactly where they
+   will when she reads it. */
+.maker-input {
+  width: 100%;
+  padding: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: clamp(13px, 1.7vw, 20px);
+  line-height: 1.55;
+  text-align: center;
+  color: inherit;
+  background: none;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;          /* height is driven from JS, so no scrollbar */
+}
+
+.maker-input::placeholder {
+  color: #5c667e;
+  font-style: italic;
+}
+
+/* The signature, sitting where it will sit. Invisible until it has something to
+   say — no box, no border, just the words appearing under the message. */
+.maker-sign {
+  width: 100%;
+  padding: 2px 0;
+  font: inherit;
+  font-size: clamp(11px, 1.3vw, 15px);
+  text-align: center;
+  color: #8f98ad;
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.maker-sign::placeholder { color: #4d5670; }
+
+/* Only on hover/focus does it admit to being editable. */
+.maker-input:focus::placeholder,
+.maker-sign:focus::placeholder { color: #6b7590; }
+
+/* --- the names: two blanks in a sentence ------------------------------------
+
+   No disclosure button, and therefore no button that can fail to disclose. An
+   underlined blank in a sentence is self-evidently something you can type in.
+   --------------------------------------------------------------------------- */
+
+.maker-who {
+  margin: 2px 0 0;
+  font-size: clamp(9px, 1.1vw, 13px);
   color: #7f8aa3;
+}
+
+.maker-name {
+  width: 6.5em;
+  padding: 1px 2px;
+  font: inherit;
+  font-size: inherit;
+  text-align: center;
+  color: var(--ink);
   background: none;
   border: 0;
   border-bottom: 1px dashed #3a4152;
-  cursor: pointer;
+  outline: none;
+  transition: border-color 140ms ease;
 }
 
-.maker-more:hover { color: var(--ink); border-bottom-color: #c8433f; }
+.maker-name:hover,
+.maker-name:focus { border-bottom-color: #c8433f; }
+
+.maker-name::placeholder { color: #7f8aa3; }
+
+/* ⚠ Centred content in a scroll container OVERFLOWS IN BOTH DIRECTIONS, and the
+   part that spills past the top edge is UNREACHABLE — you cannot scroll to it.
+   That is why "copy"/"share" vanished once the card grew. `safe center` centres
+   only while it fits, and falls back to start-aligned (i.e. scrollable) when it
+   doesn't. The plain `center` above it is the fallback for anything that doesn't
+   understand `safe`. */
+.panel-maker .panel-ask { margin-top: 0; }
+
+.panel-maker {
+  overflow-y: auto;
+  align-content: center;
+  align-content: safe center;
+}
 
 .maker-extras {
   display: grid;
@@ -485,76 +667,40 @@ body { display: grid; place-items: center; }
 
 /* --- maker ---------------------------------------------------------------- */
 
-.panel-maker { gap: 10px; }
+.panel-maker { gap: 8px; }
 
-.maker-text,
-.maker-from,
+/* The link, and the little note under it. Everything else that used to live here
+   — .maker-text, .maker-from, .maker-names and a SECOND .maker-name rule — was
+   the old form-field maker. The second .maker-name outranked the new inline one
+   (later rule, same specificity), which is why the names rendered as two big
+   bordered boxes instead of blanks in a sentence. Deleted, not overridden. */
+
 .maker-link {
   width: min(46ch, 82vw);
-  padding: 10px 12px;
+  padding: 8px 10px;
   font: inherit;
-  font-size: clamp(12px, 1.4vw, 16px);
-  color: var(--ink);
+  font-size: clamp(10px, 1.1vw, 13px);
+  color: #9fd0c4;
   background: #12141a;
   border: 2px solid #3a4152;
   border-radius: 3px;
-  resize: none;
 }
 
-.maker-text { line-height: 1.5; }
-
-.maker-text:focus,
-.maker-from:focus,
-.maker-link:focus {
-  border-color: #c8433f;
-  outline: none;
-}
+.maker-link:focus { border-color: #c8433f; outline: none; }
 
 .maker-count {
   margin: 0;
-  width: min(46ch, 82vw);
-  text-align: right;
   font-size: 11px;
   color: #6f7891;
 }
-
-/* Two name fields side by side. The placeholders ARE the defaults, so an empty
-   field is a choice, not an omission. */
-.maker-names {
-  display: flex;
-  gap: 10px;
-  width: min(46ch, 82vw);
-}
-
-.maker-name {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
-  font: inherit;
-  font-size: clamp(12px, 1.4vw, 16px);
-  text-align: center;
-  color: var(--ink);
-  background: #12141a;
-  border: 2px solid #3a4152;
-  border-radius: 3px;
-}
-
-.maker-name:focus { border-color: #c8433f; outline: none; }
-.maker-name::placeholder { color: #5a637a; }
 
 .maker-count.is-full { color: #c8433f; }
 
 .maker-result {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   justify-items: center;
-  margin-top: 12px;
   animation: rise 500ms ease both;
-}
-
-.maker-link {
-  color: #9fd0c4;
-  font-size: clamp(10px, 1.1vw, 13px);
 }
 
 .maker-note {
