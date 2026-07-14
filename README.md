@@ -15,7 +15,7 @@ your words in it.
 
 ### Music
 
-**Written by Balaji.** Four layers, all of them his — not generated, not sampled.
+**Written by Balaji.** Four layers — not generated.
 
 They don't play one at a time. Every layer is the same 8-second loop, so all four start
 together and stay phase-locked; solving a clue doesn't *swap* the music, it *adds* to it.
